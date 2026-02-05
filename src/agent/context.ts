@@ -8,11 +8,15 @@ import { ToolRegistry } from '../tools/base';
 /**
  * Context Builder
  * Assembles system prompt from workspace files, skills, and tool descriptions
+ * Inspired by nanobot's modular bootstrap file system
  */
 export class ContextBuilder {
   private config: Config;
   private skillLoader: SkillLoader;
   private toolRegistry: ToolRegistry;
+
+  // Bootstrap files loaded from workspace (if they exist)
+  private static BOOTSTRAP_FILES = ['AGENTS.md', 'TOOLS.md', 'IDENTITY.md'];
 
   constructor(config: Config, skillLoader: SkillLoader, toolRegistry: ToolRegistry) {
     this.config = config;
@@ -26,13 +30,13 @@ export class ContextBuilder {
   async buildSystemPrompt(): Promise<string> {
     const sections: string[] = [];
 
-    // 1. Core identity
+    // 1. Core identity (minimal, essential only)
     sections.push(this.getCoreIdentity());
 
-    // 2. AGENTS.md content (if exists)
-    const agentsContent = await this.getAgentsContent();
-    if (agentsContent) {
-      sections.push('## Agent Configuration\n\n' + agentsContent);
+    // 2. Bootstrap files (AGENTS.md, TOOLS.md, IDENTITY.md)
+    const bootstrapContent = await this.getBootstrapFiles();
+    if (bootstrapContent) {
+      sections.push(bootstrapContent);
     }
 
     // 3. Always-loaded skills
@@ -47,48 +51,54 @@ export class ContextBuilder {
       sections.push('## Available Skills\n\n' + skillsSummary);
     }
 
-    // 5. Tool descriptions
+    // 5. Tool descriptions (brief, details in TOOLS.md if present)
     sections.push(this.getToolDescriptions());
 
     return sections.join('\n\n---\n\n');
   }
 
   /**
-   * Get core identity section
+   * Get core identity section (minimal - details go in bootstrap files)
    */
   private getCoreIdentity(): string {
     const now = new Date();
-    return `# genieceo - AI Agent Assistant
+    return `# genieceo 🐱
 
-You are **genieceo**, an ultra-lightweight AI agent CLI assistant.
+You are genieceo, an ultra-lightweight AI agent assistant.
 
 **Current Time**: ${now.toLocaleString()}
 **Workspace**: ${this.config.workspace}
 **Model**: ${this.config.model}
 
-Your purpose is to assist users with tasks by:
-- Reading and writing files
-- Executing shell commands safely
-- Searching the web for information
-- Delegating complex tasks to subagents
-- Learning and applying skills
+You have access to tools for:
+- File operations (read, write, list)
+- Shell commands
+- Web search
+- Subagent delegation
+- Skills and memory
 
-Be helpful, efficient, and proactive. Always prioritize safety when executing commands.`;
+Be helpful, accurate, and concise. For detailed guidelines, see AGENTS.md in your workspace.`;
   }
 
   /**
-   * Get AGENTS.md content from workspace
+   * Load all bootstrap files from workspace
    */
-  private async getAgentsContent(): Promise<string | null> {
-    try {
-      const agentsPath = join(this.config.workspace, 'AGENTS.md');
-      if (existsSync(agentsPath)) {
-        return await readFile(agentsPath, 'utf-8');
+  private async getBootstrapFiles(): Promise<string | null> {
+    const parts: string[] = [];
+
+    for (const filename of ContextBuilder.BOOTSTRAP_FILES) {
+      try {
+        const filePath = join(this.config.workspace, filename);
+        if (existsSync(filePath)) {
+          const content = await readFile(filePath, 'utf-8');
+          parts.push(`## ${filename}\n\n${content}`);
+        }
+      } catch (error) {
+        // Ignore errors, files are optional
       }
-    } catch (error) {
-      // Ignore errors, file is optional
     }
-    return null;
+
+    return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
   /**

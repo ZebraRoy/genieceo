@@ -217,10 +217,10 @@ ${servicesList}
 ## Guidelines
 
 1. **Delegate deep work** - Staff keep your context clean
-2. **Read plan files** - When summaries aren't enough
-3. **Build applications** - Use staff + services
-4. **Monitor services** - Check health, view logs
-5. **Simple tasks** - Handle yourself (avoid overhead)
+2. **Read plan files** - Get full details when summaries need more depth
+3. **Build applications** - Use staff + services together
+4. **Monitor services** - Check health, view logs regularly
+5. **Handle simple tasks directly** - Use your tools for straightforward work
 6. **Curate patterns** - Save learnings to long-term memory`;
 
   // Create agent loop with custom hooks

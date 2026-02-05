@@ -1,4 +1,4 @@
-import { mkdir, writeFile, access } from 'fs/promises';
+import { mkdir, writeFile, access, copyFile, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -43,11 +43,8 @@ export class WorkspaceManager {
         }
       }
 
-      // Create AGENTS.md if it doesn't exist
-      const agentsPath = join(this.workspacePath, 'AGENTS.md');
-      if (!existsSync(agentsPath)) {
-        await writeFile(agentsPath, this.getDefaultAgentsContent());
-      }
+      // Copy bootstrap files from templates (if they don't exist)
+      await this.initializeBootstrapFiles();
 
       // Initialize GenieCEO memory files
       await this.initializeGenieCEOMemory();
@@ -156,49 +153,63 @@ This file stores important learnings, patterns, and preferences that persist acr
   }
 
   /**
-   * Get default AGENTS.md content
+   * Initialize bootstrap files from templates
+   * Users can customize these files to change agent behavior
    */
-  private getDefaultAgentsContent(): string {
-    return `# genieceo Agent Configuration
+  private async initializeBootstrapFiles(): Promise<void> {
+    const bootstrapFiles = ['AGENTS.md', 'TOOLS.md', 'IDENTITY.md'];
+    const templatesDir = join(__dirname, '..', 'templates');
 
-## Identity
+    for (const filename of bootstrapFiles) {
+      const targetPath = join(this.workspacePath, filename);
+      
+      // Only create if doesn't exist (preserve user customizations)
+      if (!existsSync(targetPath)) {
+        const templatePath = join(templatesDir, filename);
+        
+        try {
+          // Try to copy from template
+          if (existsSync(templatePath)) {
+            await copyFile(templatePath, targetPath);
+          } else {
+            // Fallback to basic content if template missing
+            await writeFile(targetPath, this.getBasicBootstrapContent(filename));
+          }
+        } catch (error) {
+          // If copy fails, create basic version
+          await writeFile(targetPath, this.getBasicBootstrapContent(filename));
+        }
+      }
+    }
+  }
 
-You are **genieceo**, an AI agent CLI assistant designed to help users with various tasks including:
+  /**
+   * Get basic bootstrap content (fallback if templates are missing)
+   */
+  private getBasicBootstrapContent(filename: string): string {
+    if (filename === 'AGENTS.md') {
+      return `# Agent Guidelines
 
-- Reading and writing files
-- Executing shell commands safely
-- Searching the web for information
-- Breaking down complex tasks using subagents
-- Learning new skills through the skill system
+You are genieceo, a helpful AI agent. Be concise, accurate, and proactive.
 
-## Guidelines
-
-1. **Be helpful and efficient**: Focus on solving the user's problem directly
-2. **Use tools wisely**: Choose the right tool for each task
-3. **Safety first**: Never execute dangerous commands without user confirmation
-4. **Learn and adapt**: Use skills to handle specialized tasks effectively
-5. **Delegate complex tasks**: Use subagents for independent work that can run in parallel
-
-## Workspace
-
-Your workspace is located at: ${this.workspacePath}
-
-- \`files/\` - Your working directory for file operations
-- \`skills/\` - Custom skills you can learn
-
-## Capabilities
-
-You have access to the following core tools:
-
-- **readFile**: Read file contents
-- **writeFile**: Create or overwrite files
-- **listDir**: List directory contents
-- **executeCommand**: Run shell commands (with safety checks)
-- **webSearch**: Search the web using multiple providers (Tavily, Brave, or browser fallback)
-- **spawnSubagent**: Create background agents for complex subtasks
-
-Remember: You're here to assist and make the user's work easier. Be proactive, thorough, and clear in your communication.
+Edit this file to customize agent behavior.
 `;
+    } else if (filename === 'TOOLS.md') {
+      return `# Available Tools
+
+Documentation for genieceo tools.
+
+Edit this file to add tool documentation.
+`;
+    } else if (filename === 'IDENTITY.md') {
+      return `# Identity & Personality
+
+You are genieceo - an AI agent assistant.
+
+Edit this file to customize personality and style.
+`;
+    }
+    return `# ${filename}\n\nCustomize this file.`;
   }
 }
 
