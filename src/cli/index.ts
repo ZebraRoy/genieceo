@@ -2,16 +2,21 @@
 
 import { Command } from 'commander';
 import { initCommand } from './commands/init';
-import { chatCommand } from './commands/chat';
 import { statusCommand } from './commands/status';
 import { onboardCommand } from './commands/onboard';
+import { ceoCommand } from './commands/ceo';
 
 const program = new Command();
 
 program
   .name('genieceo')
-  .description('Ultra-lightweight AI agent CLI assistant')
-  .version('0.1.0');
+  .description('AI CEO Agent - Manage your development workflow with an autonomous agent')
+  .version('0.1.0')
+  .option('-m, --message <text>', 'Send a single message to the CEO agent')
+  .action(async (options) => {
+    // Default action: start CEO agent
+    await ceoCommand(options);
+  });
 
 // Init command
 program
@@ -29,16 +34,6 @@ program
     await onboardCommand();
   });
 
-// Chat command
-program
-  .command('chat')
-  .description('Start interactive chat or send a single message')
-  .option('-m, --message <text>', 'Send a single message instead of interactive mode')
-  .option('--mode <type>', 'Mode: standard or genieceo (default: standard)', 'standard')
-  .action(async (options) => {
-    await chatCommand(options);
-  });
-
 // Status command
 program
   .command('status')
@@ -49,8 +44,3 @@ program
 
 // Parse arguments
 program.parse(process.argv);
-
-// Show help if no command provided
-if (!process.argv.slice(2).length) {
-  program.outputHelp();
-}

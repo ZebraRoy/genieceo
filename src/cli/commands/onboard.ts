@@ -46,8 +46,8 @@ export async function onboardCommand(): Promise<void> {
     console.log(chalk.white('\nYour configuration has been saved to:'));
     console.log(chalk.white(`  ${configManager.getConfigPath()}`));
     console.log(chalk.white('\nNext steps:'));
-    console.log(chalk.white('  • Run: genieceo chat'));
-    console.log(chalk.white('  • Or: genieceo chat -m "your message"'));
+    console.log(chalk.white('  • Run: genieceo'));
+    console.log(chalk.white('  • Or: genieceo -m "your message"'));
     console.log(chalk.white('  • Check status: genieceo status\n'));
 
     rl.close();

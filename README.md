@@ -16,10 +16,10 @@ genieceo is a powerful yet minimalist AI agent that helps you with tasks through
 
 ## 🆕 GenieCEO Multi-Agent Mode
 
-Enable GenieCEO mode for advanced capabilities:
+Start GenieCEO for advanced capabilities:
 
 ```bash
-genieceo chat --mode genieceo
+genieceo
 ```
 
 **Key Features:**
@@ -117,12 +117,12 @@ Edit `~/.genieceo/config.json` to add your API keys:
 
 **Single message:**
 ```bash
-genieceo chat -m "What is 2+2?"
+genieceo -m "What is 2+2?"
 ```
 
 **Interactive mode:**
 ```bash
-genieceo chat
+genieceo
 ```
 
 ## 🛠️ Available Tools
@@ -311,7 +311,7 @@ genieceo supports multiple web search providers with automatic fallback:
 Subagents run in the background and handle tasks independently:
 
 ```bash
-genieceo chat -m "Spawn a subagent to research the history of AI, while you create a summary document"
+genieceo -m "Spawn a subagent to research the history of AI, while you create a summary document"
 ```
 
 The agent will:
@@ -324,25 +324,25 @@ The agent will:
 ### File Operations
 
 ```bash
-genieceo chat -m "Create a hello.txt file with 'Hello, World!'"
+genieceo -m "Create a hello.txt file with 'Hello, World!'"
 ```
 
 ### Web Search
 
 ```bash
-genieceo chat -m "Search for the latest TypeScript features and summarize them"
+genieceo -m "Search for the latest TypeScript features and summarize them"
 ```
 
 ### Shell Commands
 
 ```bash
-genieceo chat -m "List all JavaScript files in the current directory"
+genieceo -m "List all JavaScript files in the current directory"
 ```
 
 ### Complex Task with Subagents
 
 ```bash
-genieceo chat -m "Create a Node.js web server with Express. Spawn subagents to create routes, middleware, and tests in parallel"
+genieceo -m "Create a Node.js web server with Express. Spawn subagents to create routes, middleware, and tests in parallel"
 ```
 
 ## 🎨 CLI Commands
@@ -365,8 +365,8 @@ Example:
 genieceo onboard
 ```
 
-### `genieceo chat`
-Start interactive chat mode
+### `genieceo`
+Start the CEO agent in interactive mode
 
 **Options:**
 - `-m, --message <text>` - Send single message instead of interactive mode

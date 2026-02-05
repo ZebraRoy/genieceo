@@ -211,7 +211,7 @@ The config manager automatically migrates legacy configs:
 ### From CLI
 
 ```bash
-genieceo chat -m "Search for the latest TypeScript features"
+genieceo -m "Search for the latest TypeScript features"
 ```
 
 ## Testing
@@ -234,7 +234,7 @@ Web Search Provider: auto
 
 ```bash
 # Edit config to set provider: "browser"
-genieceo chat -m "Search for TypeScript"
+genieceo -m "Search for TypeScript"
 ```
 
 ### Test Auto Fallback

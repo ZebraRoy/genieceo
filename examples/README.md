@@ -14,9 +14,9 @@ Staff are flexible agents that handle specific types of work. They:
 
 To use these examples in your GenieCEO workspace:
 
-1. Start GenieCEO in multi-agent mode:
+1. Start GenieCEO:
    ```bash
-   genieceo chat --mode genieceo
+   genieceo
    ```
 
 2. Define a staff member using the examples:

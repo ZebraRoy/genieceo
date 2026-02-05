@@ -68,7 +68,7 @@ npm link
 # Test commands
 genieceo init
 genieceo status
-genieceo chat -m "Hello!"
+genieceo -m "Hello!"
 ```
 
 ## Key Design Patterns

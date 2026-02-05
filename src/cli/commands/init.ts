@@ -45,8 +45,8 @@ export async function initCommand(): Promise<void> {
     if (!validation.valid) {
       console.log(chalk.gray('  • Complete setup: genieceo onboard (recommended)'));
     }
-    console.log(chalk.gray('  • Run: genieceo chat'));
-    console.log(chalk.gray('  • Or: genieceo chat -m "your message"'));
+    console.log(chalk.gray('  • Run: genieceo'));
+    console.log(chalk.gray('  • Or: genieceo -m "your message"'));
     console.log(chalk.gray('  • Check status: genieceo status\n'));
 
   } catch (error) {

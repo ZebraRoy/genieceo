@@ -3,7 +3,7 @@ import ora from "ora";
 import * as readline from "readline";
 import { getConfigManager } from "../../config/manager";
 import { getWorkspaceManager } from "../../workspace/manager";
-import { createAgent, createGenieCEOAgent } from "../../agent";
+import { createGenieCEOAgent } from "../../agent";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -11,12 +11,11 @@ interface ChatMessage {
 }
 
 /**
- * Chat command
- * Interactive chat or single message mode
+ * CEO command - Start the GenieCEO agent
+ * Runs the CEO agent in interactive mode
  */
-export async function chatCommand(options: {
+export async function ceoCommand(options: {
   message?: string;
-  mode?: string;
 }): Promise<void> {
   try {
     // Load configuration
@@ -44,30 +43,19 @@ export async function chatCommand(options: {
       await workspaceManager.init();
     }
 
-    // Create agent (standard or GenieCEO mode)
-    const mode = options.mode || 'standard';
-    const spinner = ora(
-      mode === 'genieceo' 
-        ? 'Initializing GenieCEO...' 
-        : 'Initializing agent...'
-    ).start();
+    // Create GenieCEO agent
+    const spinner = ora('Initializing GenieCEO...').start();
     
-    let agent: any;
-    if (mode === 'genieceo') {
-      agent = await createGenieCEOAgent(config);
-      
-      const budget = agent.ceoMemory?.getContextBudget();
-      const services = agent.serviceManager?.getRunningServices().length || 0;
-      
-      spinner.succeed('GenieCEO ready');
-      console.log(chalk.gray(`  • Context: ${budget?.genieCEOCurrentTokens || 0} / ${budget?.genieCEOMaxTokens || 50000} tokens`));
-      console.log(chalk.gray('  • Staff management: enabled'));
-      console.log(chalk.gray(`  • Service management: enabled (${services} running)`));
-      console.log(chalk.gray('  • Context engineering: active'));
-    } else {
-      agent = await createAgent(config);
-      spinner.succeed('Agent ready');
-    }
+    const agent: any = await createGenieCEOAgent(config);
+    
+    const budget = agent.ceoMemory?.getContextBudget();
+    const services = agent.serviceManager?.getRunningServices().length || 0;
+    
+    spinner.succeed('GenieCEO ready');
+    console.log(chalk.gray(`  • Context: ${budget?.genieCEOCurrentTokens || 0} / ${budget?.genieCEOMaxTokens || 50000} tokens`));
+    console.log(chalk.gray('  • Staff management: enabled'));
+    console.log(chalk.gray(`  • Service management: enabled (${services} running)`));
+    console.log(chalk.gray('  • Context engineering: active'));
 
     // Single message mode
     if (options.message) {
@@ -109,7 +97,7 @@ async function handleSingleMessage(agent: any, message: string): Promise<void> {
  * Handle interactive mode
  */
 async function handleInteractiveMode(agent: any): Promise<void> {
-  console.log(chalk.blue.bold("\n💬 genieceo Chat"));
+  console.log(chalk.blue.bold("\n🎯 GenieCEO"));
   console.log(
     chalk.gray('Type your message and press Enter. Type "exit" to quit.\n'),
   );

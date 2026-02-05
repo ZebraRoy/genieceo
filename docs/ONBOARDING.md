@@ -185,11 +185,11 @@ genieceo status
 After completing onboarding:
 
 ```bash
-# Start a chat
-genieceo chat
+# Start the CEO agent
+genieceo
 
 # Send a single message
-genieceo chat -m "What is 2+2?"
+genieceo -m "What is 2+2?"
 
 # Check status
 genieceo status

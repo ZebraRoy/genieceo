@@ -1,7 +1,7 @@
 {
   "name": "genieceo",
   "version": "0.1.5",
-  "description": "Ultra-lightweight AI agent CLI assistant",
+  "description": "AI CEO Agent - Autonomous development workflow management",
   "main": "dist/index.js",
   "bin": {
     "genieceo": "dist/cli/index.js"
