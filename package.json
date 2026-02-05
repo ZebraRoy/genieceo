@@ -1,6 +1,6 @@
 {
   "name": "genieceo",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Ultra-lightweight AI agent CLI assistant",
   "main": "dist/index.js",
   "bin": {
@@ -29,6 +29,7 @@
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "ora": "^5.4.1",
+    "undici": "^7.20.0",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.25.1"
   },

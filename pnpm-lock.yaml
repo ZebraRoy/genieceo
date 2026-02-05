@@ -20,6 +20,9 @@ importers:
       ora:
         specifier: ^5.4.1
         version: 5.4.1
+      undici:
+        specifier: ^7.20.0
+        version: 7.20.0
       zod:
         specifier: ^3.23.8
         version: 3.25.76

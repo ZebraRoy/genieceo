@@ -1,6 +1,53 @@
 import { z } from 'zod';
+import { fetch as undiciFetch, Agent } from 'undici';
 import type { Tool } from '../types';
 import type { Config } from '../types';
+
+// Create a custom agent with better timeout and connection settings
+const fetchAgent = new Agent({
+  keepAliveTimeout: 4000,
+  keepAliveMaxTimeout: 10000,
+  connections: 256,
+  pipelining: 1,
+  connect: {
+    timeout: 30000, // 30 second connection timeout
+    rejectUnauthorized: true,
+  },
+});
+
+// Wrapper for fetch with proper timeout and retry logic
+async function fetchWithTimeout(url: string | URL, options: any = {}, timeout = 30000, maxRetries = 2): Promise<Response> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await undiciFetch(url, {
+        ...options,
+        signal: controller.signal,
+        dispatcher: fetchAgent,
+      });
+      clearTimeout(timeoutId);
+      return response as Response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
+      
+      // If this is not the last attempt and it's a network error, wait and retry
+      if (attempt < maxRetries && (error instanceof TypeError || (error as any).code === 'UND_ERR_CONNECT_TIMEOUT')) {
+        // Wait before retrying: 500ms for first retry, 1000ms for second
+        await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+        continue;
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
 
 /**
  * Web Search Tool
@@ -89,19 +136,28 @@ async function searchWithBrave(config: Config, query: string, count: number) {
 
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`;
   
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip',
-      'X-Subscription-Token': apiKey,
-    },
-  });
+  let data: any;
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': apiKey,
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Brave Search API error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unable to read error response');
+      throw new Error(`Brave Search API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    data = await response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'fetch failed') {
+      throw new Error(`Network error: Unable to connect to Brave Search API. Check your internet connection and firewall settings. Original error: ${error.message}`);
+    }
+    throw error;
   }
-
-  const data: any = await response.json();
   
   // Extract web results
   const results = (data.web?.results || []).map((result: any) => ({
@@ -129,25 +185,35 @@ async function searchWithTavily(config: Config, query: string, count: number) {
     throw new Error('Tavily API key not configured. Add tools.webSearch.tavily.apiKey to your config file.');
   }
 
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query: query,
-      max_results: count,
-      search_depth: 'basic',
-      include_answer: false,
-    }),
-  });
+  let data: any;
+  try {
+    const response = await fetchWithTimeout('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        max_results: count,
+        search_depth: 'basic',
+        include_answer: false,
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Tavily API error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unable to read error response');
+      throw new Error(`Tavily API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    data = await response.json();
+  } catch (error) {
+    // Provide more detailed error information
+    if (error instanceof TypeError && error.message === 'fetch failed') {
+      throw new Error(`Network error: Unable to connect to Tavily API. Check your internet connection and firewall settings. Original error: ${error.message}`);
+    }
+    throw error;
   }
-
-  const data: any = await response.json();
   
   // Extract results
   const results = (data.results || []).map((result: any) => ({
@@ -173,17 +239,26 @@ async function searchWithBrowser(config: Config, query: string, count: number) {
   // Use DuckDuckGo HTML as a free fallback
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; genieceo/1.0)',
-    },
-  });
+  let html: string;
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; genieceo/1.0)',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Browser search error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unable to read error response');
+      throw new Error(`Browser search error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    html = await response.text();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'fetch failed') {
+      throw new Error(`Network error: Unable to connect to DuckDuckGo. Check your internet connection and firewall settings. Original error: ${error.message}`);
+    }
+    throw error;
   }
-
-  const html = await response.text();
   
   // Parse DuckDuckGo HTML results (simple regex-based extraction)
   const results: Array<{ title: string; url: string; snippet: string }> = [];
