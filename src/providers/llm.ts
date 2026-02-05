@@ -8,6 +8,7 @@ import {
   AssistantMessage,
   type KnownProvider
 } from '@mariozechner/pi-ai';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Config } from '../types';
 
 /**
@@ -83,11 +84,26 @@ export class LLMProvider {
       const model = this.getModelInstance();
       
       // Convert tools to pi-ai format
-      const piTools: Tool[] = Object.entries(tools).map(([name, tool]) => ({
-        name,
-        description: tool.description || '',
-        parameters: tool.parameters || {},
-      }));
+      const piTools: Tool[] = Object.entries(tools).map(([name, tool]) => {
+        // Convert Zod schema to JSON Schema if it's a Zod object
+        let parameters = tool.parameters || {};
+        if (parameters && typeof parameters === 'object' && '_def' in parameters) {
+          // This is a Zod schema, convert it to JSON Schema
+          const jsonSchema = zodToJsonSchema(parameters as any, { 
+            $refStrategy: 'none',
+            target: 'openApi3'
+          });
+          // Remove the top-level $schema property as it's not needed
+          const { $schema, ...schemaWithoutMeta } = jsonSchema as any;
+          parameters = schemaWithoutMeta;
+        }
+        
+        return {
+          name,
+          description: tool.description || '',
+          parameters,
+        };
+      });
 
       // Convert messages to pi-ai Context format
       const context: Context = {
