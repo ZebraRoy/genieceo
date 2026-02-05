@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'fs/promises';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
-import type { Skill } from '../types';
+import type { Skill, Config } from '../types';
 
 /**
  * Parse markdown frontmatter
@@ -48,10 +48,19 @@ export class SkillLoader {
   private builtinSkillsPath: string;
   private workspaceSkillsPath: string;
   private skillsCache: Map<string, Skill> = new Map();
+  private config?: Config;
 
-  constructor(builtinSkillsPath: string, workspaceSkillsPath: string) {
+  constructor(builtinSkillsPath: string, workspaceSkillsPath: string, config?: Config) {
     this.builtinSkillsPath = builtinSkillsPath;
     this.workspaceSkillsPath = workspaceSkillsPath;
+    this.config = config;
+  }
+
+  /**
+   * Set the config for checking skill requirements
+   */
+  setConfig(config: Config): void {
+    this.config = config;
   }
 
   /**
@@ -183,8 +192,8 @@ export class SkillLoader {
         if (skill.metadata.requires.bins) {
           missing.push(`bins: ${skill.metadata.requires.bins.join(', ')}`);
         }
-        if (skill.metadata.requires.env) {
-          missing.push(`env: ${skill.metadata.requires.env.join(', ')}`);
+        if (skill.metadata.requires.config) {
+          missing.push(`config: ${skill.metadata.requires.config.join(', ')}`);
         }
         entry += `\n    <missing>${missing.join('; ')}</missing>`;
       }
@@ -214,15 +223,38 @@ To use a skill, read its content with: readFile({path: "workspace/skills/{skill-
       // For now, assume all bins are available
     }
 
-    // Check for required env vars
-    if (skill.metadata.requires.env) {
-      for (const envVar of skill.metadata.requires.env) {
-        if (!process.env[envVar]) {
+    // Check for required config values
+    if (skill.metadata.requires.config && this.config) {
+      for (const configPath of skill.metadata.requires.config) {
+        // Navigate the config object using dot notation
+        const value = this.getConfigValue(configPath);
+        if (!value) {
           return false;
         }
       }
     }
 
     return true;
+  }
+
+  /**
+   * Get a config value by path (e.g., 'llm.openai.apiKey')
+   */
+  private getConfigValue(path: string): any {
+    if (!this.config) {
+      return undefined;
+    }
+
+    const keys = path.split('.');
+    let value: any = this.config;
+
+    for (const key of keys) {
+      if (value === undefined || value === null) {
+        return undefined;
+      }
+      value = value[key];
+    }
+
+    return value;
   }
 }

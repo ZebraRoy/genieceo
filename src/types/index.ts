@@ -33,7 +33,7 @@ export interface Skill {
     always?: boolean;
     requires?: {
       bins?: string[];
-      env?: string[];
+      config?: string[]; // Config paths like 'llm.openai.apiKey' or 'tools.webSearch.apiKey'
     };
   };
 }

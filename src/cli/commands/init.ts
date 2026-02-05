@@ -34,8 +34,8 @@ export async function initCommand(): Promise<void> {
       });
       
       console.log(chalk.gray('\nTo fix:'));
-      console.log(chalk.gray('  1. Edit config: ' + configManager.getConfigPath()));
-      console.log(chalk.gray('  2. Set environment variable: GENIECEO_LLM_OPENAI_API_KEY'));
+      console.log(chalk.gray('  • Edit config: ' + configManager.getConfigPath()));
+      console.log(chalk.gray('  • Add your API keys to llm.openai.apiKey in the config file'));
     } else {
       console.log(chalk.green('\n✓ Configuration is valid'));
     }

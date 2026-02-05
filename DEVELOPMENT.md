@@ -191,14 +191,15 @@ The skill will be automatically loaded on startup.
 3. Test: `npm link` and verify
 4. Publish: `npm publish`
 
-## Environment Variables
+## Configuration
 
-```bash
-GENIECEO_LLM_OPENAI_API_KEY       # OpenAI API key
-GENIECEO_MODEL                     # Model (e.g., "openai:gpt-4o")
-GENIECEO_WORKSPACE                 # Workspace path
-GENIECEO_TOOLS_WEBSEARCH_API_KEY  # Brave Search API key
-```
+All configuration is managed through `~/.genieceo/config.json`. No environment variables are used.
+
+Edit the config file directly to set:
+- **llm.openai.apiKey**: OpenAI API key
+- **model**: Model (e.g., "openai:gpt-4o")
+- **workspace**: Workspace path
+- **tools.webSearch.apiKey**: Brave Search API key
 
 ## Troubleshooting
 

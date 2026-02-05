@@ -20,7 +20,7 @@ export function createWebSearchTool(config: Config): Tool {
       if (!apiKey) {
         return {
           success: false,
-          error: 'Brave Search API key not configured. Set GENIECEO_TOOLS_WEBSEARCH_API_KEY or add to config.',
+          error: 'Brave Search API key not configured. Add tools.webSearch.apiKey to your config file.',
           query: params.query,
         };
       }

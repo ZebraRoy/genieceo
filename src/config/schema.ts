@@ -50,13 +50,11 @@ export function createDefaultConfig(): Partial<ConfigType> {
     maxIterations: 15,
     llm: {
       openai: {
-        apiKey: process.env.GENIECEO_LLM_OPENAI_API_KEY || '',
+        apiKey: '',
       },
     },
     tools: {
-      webSearch: {
-        apiKey: process.env.GENIECEO_TOOLS_WEBSEARCH_API_KEY,
-      },
+      webSearch: {},
       shell: {
         timeout: 30000,
         allowDangerous: false,

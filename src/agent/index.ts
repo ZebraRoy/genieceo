@@ -30,7 +30,7 @@ export async function createAgent(config: Config): Promise<AgentLoop> {
   // Initialize skill loader
   const builtinSkillsPath = join(__dirname, '..', 'skills', 'builtin');
   const workspaceSkillsPath = join(config.workspace, 'skills');
-  const skillLoader = new SkillLoader(builtinSkillsPath, workspaceSkillsPath);
+  const skillLoader = new SkillLoader(builtinSkillsPath, workspaceSkillsPath, config);
 
   // Load skills
   await skillLoader.loadSkills();

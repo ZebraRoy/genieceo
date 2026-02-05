@@ -37,9 +37,6 @@ export class ConfigManager {
         const content = await readFile(this.configPath, 'utf-8');
         const rawConfig = JSON.parse(content);
         
-        // Apply environment variable overrides
-        this.applyEnvOverrides(rawConfig);
-        
         // Validate and parse with Zod
         this.config = ConfigSchema.parse(rawConfig);
         return this.config;
@@ -93,41 +90,6 @@ export class ConfigManager {
     const updated = { ...current, ...updates };
     await this.save(updated);
     return updated;
-  }
-
-  /**
-   * Apply environment variable overrides
-   */
-  private applyEnvOverrides(config: any): void {
-    // LLM API keys
-    if (process.env.GENIECEO_LLM_OPENAI_API_KEY) {
-      if (!config.llm) config.llm = {};
-      if (!config.llm.openai) config.llm.openai = {};
-      config.llm.openai.apiKey = process.env.GENIECEO_LLM_OPENAI_API_KEY;
-    }
-
-    if (process.env.GENIECEO_LLM_ANTHROPIC_API_KEY) {
-      if (!config.llm) config.llm = {};
-      if (!config.llm.anthropic) config.llm.anthropic = {};
-      config.llm.anthropic.apiKey = process.env.GENIECEO_LLM_ANTHROPIC_API_KEY;
-    }
-
-    // Tool settings
-    if (process.env.GENIECEO_TOOLS_WEBSEARCH_API_KEY) {
-      if (!config.tools) config.tools = {};
-      if (!config.tools.webSearch) config.tools.webSearch = {};
-      config.tools.webSearch.apiKey = process.env.GENIECEO_TOOLS_WEBSEARCH_API_KEY;
-    }
-
-    // Model
-    if (process.env.GENIECEO_MODEL) {
-      config.model = process.env.GENIECEO_MODEL;
-    }
-
-    // Workspace
-    if (process.env.GENIECEO_WORKSPACE) {
-      config.workspace = process.env.GENIECEO_WORKSPACE;
-    }
   }
 
   /**

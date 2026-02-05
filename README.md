@@ -45,14 +45,24 @@ This creates:
 
 ### 2. Configure
 
-Edit `~/.genieceo/config.json` or set environment variables:
+Edit `~/.genieceo/config.json` to add your API keys:
 
-```bash
-# Required: OpenAI API key
-export GENIECEO_LLM_OPENAI_API_KEY="sk-..."
-
-# Optional: Brave Search API key (for web search)
-export GENIECEO_TOOLS_WEBSEARCH_API_KEY="BSA..."
+```json
+{
+  "workspace": "~/.genieceo/workspace",
+  "model": "openai:gpt-4o",
+  "maxIterations": 15,
+  "llm": {
+    "openai": {
+      "apiKey": "sk-..."
+    }
+  },
+  "tools": {
+    "webSearch": {
+      "apiKey": "BSA..."
+    }
+  }
+}
 ```
 
 ### 3. Chat!
@@ -112,7 +122,7 @@ metadata:
   always: false
   requires:
     bins: []
-    env: []
+    config: []
 ---
 
 # My Skill
@@ -120,9 +130,13 @@ metadata:
 Detailed instructions for the agent on how to use this skill...
 ```
 
+The `requires.config` field specifies config paths that must be set (e.g., `["llm.openai.apiKey", "tools.webSearch.apiKey"]`).
+
 ## 🔧 Configuration
 
 Configuration file: `~/.genieceo/config.json`
+
+All configuration is managed through this file. No environment variables are used.
 
 ```json
 {
@@ -146,16 +160,15 @@ Configuration file: `~/.genieceo/config.json`
 }
 ```
 
-### Environment Variables
+### Configuration Options
 
-All config values can be overridden with environment variables:
-
-```bash
-GENIECEO_LLM_OPENAI_API_KEY       # OpenAI API key
-GENIECEO_MODEL                     # Model (e.g., "openai:gpt-4o")
-GENIECEO_WORKSPACE                 # Workspace path
-GENIECEO_TOOLS_WEBSEARCH_API_KEY  # Brave Search API key
-```
+- **workspace**: Directory for agent files and skills (default: `~/.genieceo/workspace`)
+- **model**: LLM model in format `provider:model` (e.g., `openai:gpt-4o`)
+- **maxIterations**: Maximum agent loop iterations (default: 15)
+- **llm.openai.apiKey**: OpenAI API key (required)
+- **tools.webSearch.apiKey**: Brave Search API key (optional, for web search tool)
+- **shell.timeout**: Command timeout in milliseconds (default: 30000)
+- **shell.allowDangerous**: Allow dangerous commands (default: false)
 
 ## 🤖 Using Subagents
 
