@@ -96,7 +96,7 @@ async function handleInteractiveMode(agent: any): Promise<void> {
 
   rl.prompt();
 
-  rl.on('line', async (line: string) => {
+  rl.on('line', (line: string) => {
     const input = line.trim();
 
     // Handle exit
@@ -112,26 +112,34 @@ async function handleInteractiveMode(agent: any): Promise<void> {
       return;
     }
 
+    // Pause readline while processing
+    rl.pause();
+
     // Process message
     const spinner = ora('Thinking...').start();
     
-    try {
-      const result = await agent.runWithHistory(input, history);
-      spinner.stop();
+    // Handle async processing
+    (async () => {
+      try {
+        const result = await agent.runWithHistory(input, history);
+        spinner.stop();
 
-      // Update history
-      history.length = 0;
-      history.push(...result.updatedHistory);
+        // Update history
+        history.length = 0;
+        history.push(...result.updatedHistory);
 
-      // Display response
-      console.log(chalk.blue('\nAssistant> ') + result.response + '\n');
-    } catch (error) {
-      spinner.fail('Error');
-      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
-      console.log('');
-    }
-
-    rl.prompt();
+        // Display response
+        console.log(chalk.blue('\nAssistant> ') + result.response + '\n');
+      } catch (error) {
+        spinner.fail('Error');
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        console.log('');
+      } finally {
+        // Resume readline and show prompt
+        rl.resume();
+        rl.prompt();
+      }
+    })();
   });
 
   rl.on('close', () => {
