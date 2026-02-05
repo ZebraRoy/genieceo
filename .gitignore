@@ -16,3 +16,6 @@ test-output/
 .idea/
 *.swp
 *.swo
+
+# GenieCEO workspace data
+.genieceo/

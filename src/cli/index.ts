@@ -34,6 +34,7 @@ program
   .command('chat')
   .description('Start interactive chat or send a single message')
   .option('-m, --message <text>', 'Send a single message instead of interactive mode')
+  .option('--mode <type>', 'Mode: standard or genieceo (default: standard)', 'standard')
   .action(async (options) => {
     await chatCommand(options);
   });

@@ -12,6 +12,30 @@ genieceo is a powerful yet minimalist AI agent that helps you with tasks through
 - 🤖 **Subagents**: Delegate complex tasks to background agents
 - 🔄 **Provider-Agnostic**: Uses @mariozechner/pi-ai - supports 15+ providers with automatic model discovery
 - 💾 **Workspace**: Persistent workspace for files, skills, and configuration
+- 🧞 **NEW: GenieCEO Mode** - Multi-agent system with context engineering and service management
+
+## 🆕 GenieCEO Multi-Agent Mode
+
+Enable GenieCEO mode for advanced capabilities:
+
+```bash
+genieceo chat --mode genieceo
+```
+
+**Key Features:**
+- **Context Engineering**: Staff return ≤2K summaries from 200K context (40x savings)
+- **Flexible Staff**: Define any staff (api-builder, debugger, security-auditor)
+- **Service Management**: Build and run web servers, APIs, webhooks
+- **Smart Memory**: Auto-compaction, long-term knowledge, daily logs
+
+**Quick Example:**
+```
+"Define an api-builder staff that creates REST APIs"
+"Spawn api-builder to build a blog API"
+"Start the API as a service on port 3000"
+```
+
+See [GENIECEO_BUILD_SUMMARY.md](GENIECEO_BUILD_SUMMARY.md) and [examples/](examples/) for details.
 
 ## 📦 Installation
 

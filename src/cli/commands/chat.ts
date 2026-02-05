@@ -1,12 +1,12 @@
-import chalk from 'chalk';
-import ora from 'ora';
-import * as readline from 'readline';
-import { getConfigManager } from '../../config/manager';
-import { getWorkspaceManager } from '../../workspace/manager';
-import { createAgent } from '../../agent';
+import chalk from "chalk";
+import ora from "ora";
+import * as readline from "readline";
+import { getConfigManager } from "../../config/manager";
+import { getWorkspaceManager } from "../../workspace/manager";
+import { createAgent, createGenieCEOAgent } from "../../agent";
 
 interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
@@ -14,7 +14,10 @@ interface ChatMessage {
  * Chat command
  * Interactive chat or single message mode
  */
-export async function chatCommand(options: { message?: string }): Promise<void> {
+export async function chatCommand(options: {
+  message?: string;
+  mode?: string;
+}): Promise<void> {
   try {
     // Load configuration
     const configManager = getConfigManager();
@@ -23,8 +26,8 @@ export async function chatCommand(options: { message?: string }): Promise<void> 
     // Validate configuration
     const validation = await configManager.validate();
     if (!validation.valid) {
-      console.error(chalk.red('✗ Configuration error:'));
-      validation.errors?.forEach(error => {
+      console.error(chalk.red("✗ Configuration error:"));
+      validation.errors?.forEach((error) => {
         console.error(chalk.red(`  • ${error}`));
       });
       console.log(chalk.gray('\nRun "genieceo init" to set up configuration'));
@@ -35,14 +38,36 @@ export async function chatCommand(options: { message?: string }): Promise<void> 
     const workspaceManager = getWorkspaceManager(config.workspace);
     const isInitialized = await workspaceManager.isInitialized();
     if (!isInitialized) {
-      console.log(chalk.yellow('Workspace not initialized. Initializing now...'));
+      console.log(
+        chalk.yellow("Workspace not initialized. Initializing now..."),
+      );
       await workspaceManager.init();
     }
 
-    // Create agent
-    const spinner = ora('Initializing agent...').start();
-    const agent = await createAgent(config);
-    spinner.succeed('Agent ready');
+    // Create agent (standard or GenieCEO mode)
+    const mode = options.mode || 'standard';
+    const spinner = ora(
+      mode === 'genieceo' 
+        ? 'Initializing GenieCEO...' 
+        : 'Initializing agent...'
+    ).start();
+    
+    let agent: any;
+    if (mode === 'genieceo') {
+      agent = await createGenieCEOAgent(config);
+      
+      const budget = agent.ceoMemory?.getContextBudget();
+      const services = agent.serviceManager?.getRunningServices().length || 0;
+      
+      spinner.succeed('GenieCEO ready');
+      console.log(chalk.gray(`  • Context: ${budget?.genieCEOCurrentTokens || 0} / ${budget?.genieCEOMaxTokens || 50000} tokens`));
+      console.log(chalk.gray('  • Staff management: enabled'));
+      console.log(chalk.gray(`  • Service management: enabled (${services} running)`));
+      console.log(chalk.gray('  • Context engineering: active'));
+    } else {
+      agent = await createAgent(config);
+      spinner.succeed('Agent ready');
+    }
 
     // Single message mode
     if (options.message) {
@@ -52,10 +77,11 @@ export async function chatCommand(options: { message?: string }): Promise<void> 
 
     // Interactive mode
     await handleInteractiveMode(agent);
-
   } catch (error) {
-    console.error(chalk.red('\n✗ Error:'));
-    console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+    console.error(chalk.red("\n✗ Error:"));
+    console.error(
+      chalk.red(error instanceof Error ? error.message : String(error)),
+    );
     process.exit(1);
   }
 }
@@ -64,17 +90,17 @@ export async function chatCommand(options: { message?: string }): Promise<void> 
  * Handle single message mode
  */
 async function handleSingleMessage(agent: any, message: string): Promise<void> {
-  const spinner = ora('Thinking...').start();
+  const spinner = ora("Thinking...").start();
 
   try {
     const response = await agent.run(message);
     spinner.stop();
-    
-    console.log(chalk.blue('\n💬 Response:\n'));
+
+    console.log(chalk.blue("\n💬 Response:\n"));
     console.log(response);
-    console.log('');
+    console.log("");
   } catch (error) {
-    spinner.fail('Failed');
+    spinner.fail("Failed");
     throw error;
   }
 }
@@ -83,25 +109,27 @@ async function handleSingleMessage(agent: any, message: string): Promise<void> {
  * Handle interactive mode
  */
 async function handleInteractiveMode(agent: any): Promise<void> {
-  console.log(chalk.blue.bold('\n💬 genieceo Chat'));
-  console.log(chalk.gray('Type your message and press Enter. Type "exit" to quit.\n'));
+  console.log(chalk.blue.bold("\n💬 genieceo Chat"));
+  console.log(
+    chalk.gray('Type your message and press Enter. Type "exit" to quit.\n'),
+  );
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: chalk.green('You> '),
+    prompt: chalk.green("You> "),
   });
 
   const history: ChatMessage[] = [];
 
   rl.prompt();
 
-  rl.on('line', (line: string) => {
+  rl.on("line", (line: string) => {
     const input = line.trim();
 
     // Handle exit
-    if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
-      console.log(chalk.gray('\nGoodbye! 👋\n'));
+    if (input.toLowerCase() === "exit" || input.toLowerCase() === "quit") {
+      console.log(chalk.gray("\nGoodbye! 👋\n"));
       rl.close();
       process.exit(0);
     }
@@ -116,8 +144,8 @@ async function handleInteractiveMode(agent: any): Promise<void> {
     rl.pause();
 
     // Process message
-    const spinner = ora('Thinking...').start();
-    
+    const spinner = ora("Thinking...").start();
+
     // Handle async processing
     (async () => {
       try {
@@ -129,11 +157,13 @@ async function handleInteractiveMode(agent: any): Promise<void> {
         history.push(...result.updatedHistory);
 
         // Display response
-        console.log(chalk.blue('\nAssistant> ') + result.response + '\n');
+        console.log(chalk.blue("\nAssistant> ") + result.response + "\n");
       } catch (error) {
-        spinner.fail('Error');
-        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
-        console.log('');
+        spinner.fail("Error");
+        console.error(
+          chalk.red(error instanceof Error ? error.message : String(error)),
+        );
+        console.log("");
       } finally {
         // Resume readline and show prompt
         rl.resume();
@@ -142,14 +172,14 @@ async function handleInteractiveMode(agent: any): Promise<void> {
     })();
   });
 
-  rl.on('close', () => {
-    console.log(chalk.gray('\nGoodbye! 👋\n'));
+  rl.on("close", () => {
+    console.log(chalk.gray("\nGoodbye! 👋\n"));
     process.exit(0);
   });
 
   // Handle Ctrl+C
-  rl.on('SIGINT', () => {
-    console.log(chalk.gray('\n\nGoodbye! 👋\n'));
+  rl.on("SIGINT", () => {
+    console.log(chalk.gray("\n\nGoodbye! 👋\n"));
     process.exit(0);
   });
 }

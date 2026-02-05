@@ -1,6 +1,6 @@
 {
   "name": "genieceo",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Ultra-lightweight AI agent CLI assistant",
   "main": "dist/index.js",
   "bin": {
