@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import * as readline from 'readline';
+import { checkbox, input, select } from '@inquirer/prompts';
 import { getConfigManager } from '../../config/manager';
 import { LLMProvider } from '../../providers/llm';
 import { getProviders } from '@mariozechner/pi-ai';
@@ -10,8 +11,8 @@ import type { ConfigType } from '../../config/schema';
  * Interactive setup for LLM and web search configuration
  */
 export async function onboardCommand(): Promise<void> {
-  console.log(chalk.blue.bold('\n👋 Welcome to genieceo onboarding!\n'));
-  console.log(chalk.gray('This wizard will help you configure your AI agent.\n'));
+  console.log(chalk.cyan.bold('\n👋 Welcome to genieceo onboarding!\n'));
+  console.log(chalk.white('This wizard will help you configure your AI agent.\n'));
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -24,17 +25,17 @@ export async function onboardCommand(): Promise<void> {
 
     // Step 1: Configure LLM Provider
     console.log(chalk.cyan.bold('Step 1: LLM Configuration'));
-    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.white('─'.repeat(50)));
     config = await configureLLM(rl, config);
 
     // Step 2: Health check LLM
     console.log(chalk.cyan.bold('\nStep 2: LLM Health Check'));
-    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.white('─'.repeat(50)));
     await healthCheckLLM(config);
 
     // Step 3: Configure Web Search
     console.log(chalk.cyan.bold('\nStep 3: Web Search Configuration'));
-    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.white('─'.repeat(50)));
     config = await configureWebSearch(rl, config);
 
     // Save final configuration
@@ -42,12 +43,12 @@ export async function onboardCommand(): Promise<void> {
 
     // Success message
     console.log(chalk.green.bold('\n✨ Onboarding complete!'));
-    console.log(chalk.gray('\nYour configuration has been saved to:'));
-    console.log(chalk.gray(`  ${configManager.getConfigPath()}`));
-    console.log(chalk.gray('\nNext steps:'));
-    console.log(chalk.gray('  • Run: genieceo chat'));
-    console.log(chalk.gray('  • Or: genieceo chat -m "your message"'));
-    console.log(chalk.gray('  • Check status: genieceo status\n'));
+    console.log(chalk.white('\nYour configuration has been saved to:'));
+    console.log(chalk.white(`  ${configManager.getConfigPath()}`));
+    console.log(chalk.white('\nNext steps:'));
+    console.log(chalk.white('  • Run: genieceo chat'));
+    console.log(chalk.white('  • Or: genieceo chat -m "your message"'));
+    console.log(chalk.white('  • Check status: genieceo status\n'));
 
     rl.close();
   } catch (error) {
@@ -67,98 +68,140 @@ async function configureLLM(
 ): Promise<ConfigType> {
   // Get available providers
   const availableProviders = getProviders() as string[];
-  console.log(chalk.gray('\nAvailable LLM providers:'));
-  availableProviders.forEach((provider, index) => {
-    console.log(chalk.gray(`  ${index + 1}. ${provider}`));
+  
+  // Multi-select providers to configure
+  const selectedProviders = await checkbox({
+    message: 'Select providers to configure (Space to select, Enter to continue):',
+    choices: availableProviders.map((provider) => ({
+      name: provider,
+      value: provider,
+      checked: false,
+    })),
+    required: true,
+    theme: {
+      style: {
+        // High contrast colors for WCAG AA compliance
+        highlight: chalk.cyan,  // Cyan on black has good contrast
+        description: chalk.white,
+      },
+    },
   });
 
-  // Ask for provider
-  const provider = await question(
-    rl,
-    chalk.white(`\nSelect a provider [${availableProviders.join('/')}] (default: openai): `)
-  );
-  const selectedProvider = provider.trim().toLowerCase() || 'openai';
+  // Configure API keys for each selected provider
+  for (const provider of selectedProviders) {
+    console.log(chalk.cyan(`\nConfiguring ${provider}...`));
+    
+    // Get current API key
+    const currentKey = provider === 'openai' 
+      ? config.llm.openai.apiKey 
+      : config.llm.anthropic?.apiKey || '';
+    
+    const keyPrompt = currentKey 
+      ? `Enter ${provider} API key (press Enter to keep current):`
+      : `Enter ${provider} API key:`;
 
-  if (!availableProviders.includes(selectedProvider)) {
-    throw new Error(`Invalid provider. Choose from: ${availableProviders.join(', ')}`);
+    const apiKey = await input({
+      message: keyPrompt,
+      default: currentKey ? '***hidden***' : undefined,
+      theme: {
+        style: {
+          message: chalk.white,
+          answer: chalk.green,
+        },
+      },
+    });
+
+    // Only update if not the hidden placeholder
+    const finalApiKey = apiKey === '***hidden***' ? currentKey : apiKey.trim();
+
+    if (!finalApiKey) {
+      throw new Error(`API key is required for ${provider}`);
+    }
+
+    // Update config with API key
+    if (provider === 'openai') {
+      config.llm.openai.apiKey = finalApiKey;
+    } else if (provider === 'anthropic') {
+      config.llm.anthropic = { apiKey: finalApiKey };
+    }
+
+    console.log(chalk.green(`✓ ${provider} API key saved`));
   }
 
-  // Ask for API key
-  const currentKey = selectedProvider === 'openai' 
-    ? config.llm.openai.apiKey 
-    : config.llm.anthropic?.apiKey || '';
-  
-  const keyPrompt = currentKey 
-    ? `Enter ${selectedProvider} API key (press Enter to keep current): `
-    : `Enter ${selectedProvider} API key: `;
+  // Now select which provider's models to browse
+  const primaryProvider = await select({
+    message: 'Select primary provider for model selection:',
+    choices: selectedProviders.map((provider) => ({
+      name: provider,
+      value: provider,
+    })),
+    theme: {
+      style: {
+        highlight: chalk.cyan,
+        description: chalk.white,
+      },
+    },
+  });
 
-  const apiKey = await question(rl, chalk.white(keyPrompt));
-  const finalApiKey = apiKey.trim() || currentKey;
-
-  if (!finalApiKey) {
-    throw new Error('API key is required');
-  }
-
-  // Update config with API key
-  if (selectedProvider === 'openai') {
-    config.llm.openai.apiKey = finalApiKey;
-  } else if (selectedProvider === 'anthropic') {
-    config.llm.anthropic = { apiKey: finalApiKey };
-  }
-
-  console.log(chalk.green('✓ API key saved'));
-
-  // Get available models for the provider
+  // Get available models for the primary provider
   const tempLLMProvider = new LLMProvider(config);
-  const models = tempLLMProvider.getAvailableModels(selectedProvider as any);
+  const models = tempLLMProvider.getAvailableModels(primaryProvider as any);
 
   if (models.length === 0) {
     console.log(chalk.yellow('⚠️  Could not fetch models for this provider'));
     
     // Ask user to manually input model
-    const modelInput = await question(
-      rl,
-      chalk.white(`\nEnter model ID (e.g., gpt-4o, claude-3-5-sonnet-20241022): `)
-    );
+    const modelInput = await input({
+      message: `Enter model ID (e.g., gpt-4o, claude-3-5-sonnet-20241022):`,
+      required: true,
+      theme: {
+        style: {
+          message: chalk.white,
+          answer: chalk.green,
+        },
+      },
+    });
     
-    if (!modelInput.trim()) {
-      throw new Error('Model ID is required');
-    }
-    
-    config.model = `${selectedProvider}:${modelInput.trim()}`;
+    config.model = `${primaryProvider}:${modelInput.trim()}`;
   } else {
-    // Display available models
-    console.log(chalk.gray('\nAvailable models:'));
-    models.forEach((model, index) => {
-      console.log(chalk.gray(`  ${index + 1}. ${model.id}${model.name ? ` - ${model.name}` : ''}`));
+    // Multi-select models to view, then pick one as primary
+    const selectedModels = await checkbox({
+      message: 'Select models you want to use (Space to select, Enter to continue):',
+      choices: models.map((model) => ({
+        name: `${model.id}${model.name ? ` - ${model.name}` : ''}`,
+        value: model.id,
+        checked: false,
+      })),
+      required: true,
+      theme: {
+        style: {
+          highlight: chalk.cyan,
+          description: chalk.white,
+        },
+      },
     });
 
-    // Ask for model selection
-    const defaultModel = models[0].id;
-    const modelInput = await question(
-      rl,
-      chalk.white(`\nSelect model [enter model ID or number] (default: ${defaultModel}): `)
-    );
-
-    let selectedModel: string;
-    const input = modelInput.trim();
-    
-    if (!input) {
-      selectedModel = defaultModel;
-    } else if (/^\d+$/.test(input)) {
-      // User entered a number
-      const index = parseInt(input) - 1;
-      if (index >= 0 && index < models.length) {
-        selectedModel = models[index].id;
-      } else {
-        throw new Error(`Invalid model number. Choose 1-${models.length}`);
-      }
+    // If multiple models selected, ask which one should be the default
+    let primaryModel: string;
+    if (selectedModels.length > 1) {
+      primaryModel = await select({
+        message: 'Select the default model to use:',
+        choices: selectedModels.map((modelId) => ({
+          name: modelId,
+          value: modelId,
+        })),
+        theme: {
+          style: {
+            highlight: chalk.cyan,
+            description: chalk.white,
+          },
+        },
+      });
     } else {
-      // User entered model ID directly
-      selectedModel = input;
+      primaryModel = selectedModels[0];
     }
 
-    config.model = `${selectedProvider}:${selectedModel}`;
+    config.model = `${primaryProvider}:${primaryModel}`;
   }
 
   console.log(chalk.green(`✓ Model set to: ${config.model}`));
@@ -170,7 +213,7 @@ async function configureLLM(
  * Health check LLM configuration
  */
 async function healthCheckLLM(config: ConfigType): Promise<void> {
-  console.log(chalk.gray('\nTesting LLM connection...'));
+  console.log(chalk.white('\nTesting LLM connection...'));
 
   const llmProvider = new LLMProvider(config);
 
@@ -188,7 +231,7 @@ async function healthCheckLLM(config: ConfigType): Promise<void> {
 
   // Try a simple generation
   try {
-    console.log(chalk.gray('Making a test API call...'));
+    console.log(chalk.white('Making a test API call...'));
     
     const response = await llmProvider.generate(
       [
@@ -202,8 +245,8 @@ async function healthCheckLLM(config: ConfigType): Promise<void> {
     );
 
     console.log(chalk.green('✓ LLM health check passed'));
-    console.log(chalk.gray(`  Response: ${response.text.slice(0, 100)}${response.text.length > 100 ? '...' : ''}`));
-    console.log(chalk.gray(`  Tokens used: ${response.usage.totalTokens}`));
+    console.log(chalk.white(`  Response: ${response.text.slice(0, 100)}${response.text.length > 100 ? '...' : ''}`));
+    console.log(chalk.white(`  Tokens used: ${response.usage.totalTokens}`));
   } catch (error) {
     console.log(chalk.red('✗ LLM health check failed'));
     throw new Error(`LLM test failed: ${error instanceof Error ? error.message : error}`);
@@ -217,21 +260,37 @@ async function configureWebSearch(
   rl: readline.Interface,
   config: ConfigType
 ): Promise<ConfigType> {
-  console.log(chalk.gray('\nWeb search providers:'));
-  console.log(chalk.gray('  1. auto - Try Tavily, then Brave, then browser (recommended)'));
-  console.log(chalk.gray('  2. tavily - Tavily Search API (requires API key)'));
-  console.log(chalk.gray('  3. brave - Brave Search API (requires API key)'));
-  console.log(chalk.gray('  4. browser - Free browser-based search (no API key needed)'));
-
-  const provider = await question(
-    rl,
-    chalk.white('\nSelect web search provider [auto/tavily/brave/browser] (default: auto): ')
-  );
-  const selectedProvider = provider.trim().toLowerCase() || 'auto';
-
-  if (!['auto', 'tavily', 'brave', 'browser'].includes(selectedProvider)) {
-    throw new Error('Invalid provider. Choose from: auto, tavily, brave, browser');
-  }
+  const selectedProvider = await select({
+    message: 'Select web search provider:',
+    choices: [
+      {
+        name: 'auto - Try Tavily, then Brave, then browser (recommended)',
+        value: 'auto',
+        description: 'Automatically fallback through available providers',
+      },
+      {
+        name: 'tavily - Tavily Search API',
+        value: 'tavily',
+        description: 'Requires API key from https://tavily.com',
+      },
+      {
+        name: 'brave - Brave Search API',
+        value: 'brave',
+        description: 'Requires API key from https://brave.com/search/api',
+      },
+      {
+        name: 'browser - Free browser-based search',
+        value: 'browser',
+        description: 'No API key needed, but may have limited results',
+      },
+    ],
+    theme: {
+      style: {
+        highlight: chalk.cyan,
+        description: chalk.white,
+      },
+    },
+  });
 
   config.tools.webSearch.provider = selectedProvider as any;
   console.log(chalk.green(`✓ Web search provider set to: ${selectedProvider}`));
@@ -239,17 +298,38 @@ async function configureWebSearch(
   // Configure API keys based on selection
   if (selectedProvider === 'tavily' || selectedProvider === 'auto') {
     const currentKey = config.tools.webSearch.tavily?.apiKey || '';
-    const skipTavily = selectedProvider === 'auto' 
-      ? await question(rl, chalk.white('\nConfigure Tavily API? [y/N]: '))
-      : 'y';
+    
+    const shouldConfigureTavily = selectedProvider === 'tavily' || 
+      await select({
+        message: 'Configure Tavily API?',
+        choices: [
+          { name: 'Yes', value: true },
+          { name: 'No', value: false },
+        ],
+        theme: {
+          style: {
+            highlight: chalk.cyan,
+          },
+        },
+      });
 
-    if (skipTavily.toLowerCase() === 'y' || selectedProvider === 'tavily') {
+    if (shouldConfigureTavily) {
       const keyPrompt = currentKey
-        ? 'Enter Tavily API key (press Enter to keep current): '
-        : 'Enter Tavily API key (get one at https://tavily.com): ';
+        ? 'Enter Tavily API key (press Enter to keep current):'
+        : 'Enter Tavily API key (get one at https://tavily.com):';
 
-      const apiKey = await question(rl, chalk.white(keyPrompt));
-      const finalKey = apiKey.trim() || currentKey;
+      const apiKey = await input({
+        message: keyPrompt,
+        default: currentKey ? '***hidden***' : undefined,
+        theme: {
+          style: {
+            message: chalk.white,
+            answer: chalk.green,
+          },
+        },
+      });
+
+      const finalKey = apiKey === '***hidden***' ? currentKey : apiKey.trim();
 
       if (finalKey) {
         config.tools.webSearch.tavily = { apiKey: finalKey };
@@ -262,17 +342,38 @@ async function configureWebSearch(
 
   if (selectedProvider === 'brave' || selectedProvider === 'auto') {
     const currentKey = config.tools.webSearch.brave?.apiKey || '';
-    const skipBrave = selectedProvider === 'auto'
-      ? await question(rl, chalk.white('\nConfigure Brave API? [y/N]: '))
-      : 'y';
+    
+    const shouldConfigureBrave = selectedProvider === 'brave' || 
+      await select({
+        message: 'Configure Brave API?',
+        choices: [
+          { name: 'Yes', value: true },
+          { name: 'No', value: false },
+        ],
+        theme: {
+          style: {
+            highlight: chalk.cyan,
+          },
+        },
+      });
 
-    if (skipBrave.toLowerCase() === 'y' || selectedProvider === 'brave') {
+    if (shouldConfigureBrave) {
       const keyPrompt = currentKey
-        ? 'Enter Brave API key (press Enter to keep current): '
-        : 'Enter Brave API key (get one at https://brave.com/search/api): ';
+        ? 'Enter Brave API key (press Enter to keep current):'
+        : 'Enter Brave API key (get one at https://brave.com/search/api):';
 
-      const apiKey = await question(rl, chalk.white(keyPrompt));
-      const finalKey = apiKey.trim() || currentKey;
+      const apiKey = await input({
+        message: keyPrompt,
+        default: currentKey ? '***hidden***' : undefined,
+        theme: {
+          style: {
+            message: chalk.white,
+            answer: chalk.green,
+          },
+        },
+      });
+
+      const finalKey = apiKey === '***hidden***' ? currentKey : apiKey.trim();
 
       if (finalKey) {
         config.tools.webSearch.brave = { apiKey: finalKey };
