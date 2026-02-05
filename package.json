@@ -1,0 +1,39 @@
+{
+  "name": "genieceo",
+  "version": "0.1.0",
+  "description": "Ultra-lightweight AI agent CLI assistant",
+  "main": "dist/index.js",
+  "bin": {
+    "genieceo": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/cli/index.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "assistant",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^1.0.9",
+    "ai": "^4.1.4",
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "ora": "^5.4.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  }
+}
