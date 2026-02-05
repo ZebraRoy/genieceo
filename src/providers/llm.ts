@@ -75,6 +75,7 @@ export class LLMProvider {
     maxSteps: number = 10
   ): Promise<{
     text: string;
+    content: any[];
     toolCalls: any[];
     toolResults: any[];
     finishReason: string;
@@ -128,15 +129,27 @@ export class LLMProvider {
         step++;
 
         // Convert messages to pi-ai Context format
-        const context: Context = {
-          messages: currentMessages.map(msg => {
+        const context: any = {
+          messages: currentMessages.map((msg) => {
+            // Handle string content
             if (typeof msg.content === 'string') {
               return {
-                role: msg.role as 'user' | 'assistant',
+                role: msg.role,
                 content: msg.content,
               };
             }
-            return msg;
+            // Handle array content - pass through for assistant messages with tool calls
+            if (Array.isArray(msg.content)) {
+              return {
+                role: msg.role,
+                content: msg.content,
+              };
+            }
+            // Fallback - shouldn't happen
+            return {
+              role: msg.role,
+              content: JSON.stringify(msg.content),
+            };
           }),
           tools: piTools.length > 0 ? piTools : undefined,
         };
@@ -145,6 +158,12 @@ export class LLMProvider {
         const response: AssistantMessage = await complete(model, context, {
           apiKey,
         });
+        
+        // If there's an error in the response, throw it immediately
+        if (response.stopReason === 'error') {
+          const errorMessage = (response as any).errorMessage || 'Unknown error';
+          throw new Error(`LLM API error: ${errorMessage}`);
+        }
 
         // Accumulate usage
         totalUsage.promptTokens += response.usage.input;
@@ -201,26 +220,33 @@ export class LLMProvider {
         allToolCalls.push(...toolCalls);
         allToolResults.push(...toolResults);
 
-        // Add assistant message with tool calls and user message with tool results to history
+        // Add assistant message with tool calls to history
         currentMessages.push({
           role: 'assistant',
           content: response.content,
         });
         
+        // Add tool results as text in a user message
+        // The pi-ai library and OpenAI expect tool results as plain text, not structured objects
+        const toolResultsText = toolResults.map(tr => 
+          `Tool ${tr.toolCallId} result:\n${tr.result}`
+        ).join('\n\n');
+        
         currentMessages.push({
           role: 'user',
-          content: toolResults.map(tr => ({
-            type: 'toolResult',
-            toolCallId: tr.toolCallId,
-            content: tr.result,
-          })),
+          content: toolResultsText,
         });
 
         finishReason = response.stopReason;
       }
 
+      // Return both text and content array for proper history management
+      // If we have text, wrap it in a content array
+      const contentArray = finalText ? [{ type: 'text' as const, text: finalText }] : [];
+      
       return {
         text: finalText,
+        content: contentArray,
         toolCalls: allToolCalls,
         toolResults: allToolResults,
         finishReason,

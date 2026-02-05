@@ -6,7 +6,7 @@ import { ContextBuilder } from './context';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | any[]; // Support both string and array content for pi-ai compatibility
 }
 
 /**
@@ -103,6 +103,7 @@ export class AgentLoop {
       );
 
       // Update history with new exchange
+      // Assistant messages must have content as an array for pi-ai compatibility
       const updatedHistory = [
         ...history,
         {
@@ -111,7 +112,7 @@ export class AgentLoop {
         },
         {
           role: 'assistant' as const,
-          content: result.text,
+          content: result.content || (result.text ? [{ type: 'text' as const, text: result.text }] : []),
         },
       ];
 
