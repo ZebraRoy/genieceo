@@ -37,8 +37,11 @@ export class ConfigManager {
         const content = await readFile(this.configPath, 'utf-8');
         const rawConfig = JSON.parse(content);
         
+        // Migrate legacy config if needed
+        const migratedConfig = this.migrateLegacyConfig(rawConfig);
+        
         // Validate and parse with Zod
-        this.config = ConfigSchema.parse(rawConfig);
+        this.config = ConfigSchema.parse(migratedConfig);
         return this.config;
       } else {
         // Create default config if file doesn't exist
@@ -47,6 +50,32 @@ export class ConfigManager {
     } catch (error) {
       throw new Error(`Failed to load config: ${error instanceof Error ? error.message : error}`);
     }
+  }
+
+  /**
+   * Migrate legacy config format to new multi-provider format
+   */
+  private migrateLegacyConfig(config: any): any {
+    // Check if using legacy webSearch.apiKey format
+    if (config.tools?.webSearch?.apiKey && !config.tools.webSearch.brave) {
+      console.warn('⚠️  Migrating legacy config format (tools.webSearch.apiKey → tools.webSearch.brave.apiKey)');
+      
+      return {
+        ...config,
+        tools: {
+          ...config.tools,
+          webSearch: {
+            provider: 'auto',
+            brave: {
+              apiKey: config.tools.webSearch.apiKey,
+            },
+            // Keep legacy key for backward compatibility but it won't be saved
+          },
+        },
+      };
+    }
+    
+    return config;
   }
 
   /**

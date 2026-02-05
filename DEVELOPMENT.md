@@ -32,7 +32,7 @@ genieceo/
 │   │   ├── filesystem.ts   # readFile, writeFile, listDir
 │   │   ├── shell.ts        # executeCommand (with safety)
 │   │   ├── spawn.ts        # spawnSubagent
-│   │   └── web.ts          # webSearch (Brave)
+│   │   └── web.ts          # webSearch (multi-provider)
 │   ├── types/              # TypeScript types
 │   │   └── index.ts        # Shared types
 │   └── workspace/          # Workspace management
@@ -199,7 +199,9 @@ Edit the config file directly to set:
 - **llm.openai.apiKey**: OpenAI API key
 - **model**: Model (e.g., "openai:gpt-4o")
 - **workspace**: Workspace path
-- **tools.webSearch.apiKey**: Brave Search API key
+- **tools.webSearch.provider**: Search provider ("auto", "brave", "tavily", or "browser")
+- **tools.webSearch.tavily.apiKey**: Tavily Search API key (optional, recommended)
+- **tools.webSearch.brave.apiKey**: Brave Search API key (optional)
 
 ## Troubleshooting
 

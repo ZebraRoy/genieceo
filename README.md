@@ -59,11 +59,19 @@ Edit `~/.genieceo/config.json` to add your API keys:
   },
   "tools": {
     "webSearch": {
-      "apiKey": "BSA..."
+      "provider": "auto",
+      "tavily": {
+        "apiKey": "tvly-..."
+      },
+      "brave": {
+        "apiKey": "BSA..."
+      }
     }
   }
 }
 ```
+
+**Note:** Web search will work even without API keys by using the browser fallback. However, for better results, configure at least one search provider (Tavily or Brave).
 
 ### 3. Chat!
 
@@ -90,7 +98,7 @@ genieceo comes with powerful built-in tools:
 - **executeCommand**: Run shell commands (with safety checks)
 
 ### Web
-- **webSearch**: Search the web using Brave Search API
+- **webSearch**: Search the web using multiple providers (Tavily, Brave, or browser fallback)
 
 ### Subagents
 - **spawnSubagent**: Create background agents for complex tasks
@@ -150,7 +158,13 @@ All configuration is managed through this file. No environment variables are use
   },
   "tools": {
     "webSearch": {
-      "apiKey": "BSA..."
+      "provider": "auto",
+      "tavily": {
+        "apiKey": "tvly-..."
+      },
+      "brave": {
+        "apiKey": "BSA..."
+      }
     },
     "shell": {
       "timeout": 30000,
@@ -162,13 +176,95 @@ All configuration is managed through this file. No environment variables are use
 
 ### Configuration Options
 
+#### Core Settings
 - **workspace**: Directory for agent files and skills (default: `~/.genieceo/workspace`)
 - **model**: LLM model in format `provider:model` (e.g., `openai:gpt-4o`)
 - **maxIterations**: Maximum agent loop iterations (default: 15)
+
+#### LLM Configuration
 - **llm.openai.apiKey**: OpenAI API key (required)
-- **tools.webSearch.apiKey**: Brave Search API key (optional, for web search tool)
+
+#### Web Search Configuration
+- **tools.webSearch.provider**: Search provider to use (options: `auto`, `brave`, `tavily`, `browser`)
+  - `auto` (default): Tries providers in order (Tavily → Brave → Browser)
+  - `brave`: Use Brave Search API only
+  - `tavily`: Use Tavily Search API only
+  - `browser`: Use browser-based fallback only (free, no API key needed)
+- **tools.webSearch.tavily.apiKey**: Tavily API key (optional but recommended)
+  - Get your free API key at [tavily.com](https://tavily.com)
+  - Free tier: 1,000 searches/month
+  - Recommended for best search quality
+- **tools.webSearch.brave.apiKey**: Brave Search API key (optional)
+  - Note: Brave now requires payment
+  - Get API key at [brave.com/search/api](https://brave.com/search/api)
+
+**Browser Fallback**: If no API keys are configured, web search automatically uses a browser-based fallback (DuckDuckGo HTML). This works out-of-the-box with no configuration needed.
+
+#### Shell Configuration
 - **shell.timeout**: Command timeout in milliseconds (default: 30000)
 - **shell.allowDangerous**: Allow dangerous commands (default: false)
+
+## 🔍 Web Search
+
+genieceo supports multiple web search providers with automatic fallback:
+
+### Search Providers
+
+1. **Tavily** (Recommended)
+   - High-quality search results optimized for AI agents
+   - Free tier: 1,000 searches/month
+   - Get API key: [tavily.com](https://tavily.com)
+   - Config: `tools.webSearch.tavily.apiKey`
+
+2. **Brave Search**
+   - Premium search API (now requires payment)
+   - Get API key: [brave.com/search/api](https://brave.com/search/api)
+   - Config: `tools.webSearch.brave.apiKey`
+
+3. **Browser Fallback** (Always Available)
+   - Free, no API key required
+   - Uses DuckDuckGo HTML search
+   - Automatically used when no API keys configured
+   - Good enough for most use cases
+
+### Configuration Examples
+
+**Auto mode** (tries providers in order):
+```json
+{
+  "tools": {
+    "webSearch": {
+      "provider": "auto",
+      "tavily": { "apiKey": "tvly-..." }
+    }
+  }
+}
+```
+
+**Specific provider**:
+```json
+{
+  "tools": {
+    "webSearch": {
+      "provider": "tavily",
+      "tavily": { "apiKey": "tvly-..." }
+    }
+  }
+}
+```
+
+**Browser-only** (no API key needed):
+```json
+{
+  "tools": {
+    "webSearch": {
+      "provider": "browser"
+    }
+  }
+}
+```
+
+**Note**: The config format shown above is the current format. If you're using an older development version with `tools.webSearch.apiKey`, update to the new nested format shown in the examples.
 
 ## 🤖 Using Subagents
 

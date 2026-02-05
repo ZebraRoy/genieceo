@@ -16,6 +16,14 @@ export interface Config {
   };
   tools: {
     webSearch: {
+      provider?: 'auto' | 'brave' | 'tavily' | 'browser';
+      brave?: {
+        apiKey: string;
+      };
+      tavily?: {
+        apiKey: string;
+      };
+      // Legacy support for old config format
       apiKey?: string;
     };
     shell: {

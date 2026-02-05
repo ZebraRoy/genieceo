@@ -20,6 +20,14 @@ export const ConfigSchema = z.object({
   }),
   tools: z.object({
     webSearch: z.object({
+      provider: z.enum(['auto', 'brave', 'tavily', 'browser']).default('auto').optional(),
+      brave: z.object({
+        apiKey: z.string(),
+      }).optional(),
+      tavily: z.object({
+        apiKey: z.string(),
+      }).optional(),
+      // Legacy support for old config format
       apiKey: z.string().optional(),
     }).default({}),
     shell: z.object({
@@ -54,7 +62,9 @@ export function createDefaultConfig(): Partial<ConfigType> {
       },
     },
     tools: {
-      webSearch: {},
+      webSearch: {
+        provider: 'auto',
+      },
       shell: {
         timeout: 30000,
         allowDangerous: false,
