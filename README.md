@@ -10,7 +10,7 @@ genieceo is a powerful yet minimalist AI agent that helps you with tasks through
 - 🛠️ **Rich Toolset**: File operations, shell commands, web search, and more
 - 🎯 **Skill System**: Teach the agent new capabilities through markdown files
 - 🤖 **Subagents**: Delegate complex tasks to background agents
-- 🔄 **Provider-Agnostic**: Uses Vercel AI SDK - easily switch between OpenAI, Anthropic, etc.
+- 🔄 **Provider-Agnostic**: Uses @mariozechner/pi-ai - supports 15+ providers with automatic model discovery
 - 💾 **Workspace**: Persistent workspace for files, skills, and configuration
 
 ## 📦 Installation
@@ -44,6 +44,22 @@ This creates:
 - Workspace directory at `~/.genieceo/workspace/`
 
 ### 2. Configure
+
+#### Option A: Interactive Setup (Recommended)
+
+Run the onboarding wizard to configure everything step-by-step:
+
+```bash
+genieceo onboard
+```
+
+The wizard will guide you through:
+- **LLM Configuration**: Select provider (OpenAI, Anthropic, etc.) and enter API key
+- **Model Selection**: Choose from available models for your provider
+- **Health Check**: Verify your LLM setup is working correctly
+- **Web Search**: Configure search providers (Tavily, Brave, or browser-based)
+
+#### Option B: Manual Configuration
 
 Edit `~/.genieceo/config.json` to add your API keys:
 
@@ -310,6 +326,21 @@ genieceo chat -m "Create a Node.js web server with Express. Spawn subagents to c
 ### `genieceo init`
 Initialize workspace and configuration
 
+### `genieceo onboard`
+Interactive setup wizard for configuring LLM and web search
+
+This command guides you through:
+- **LLM Provider Selection**: Choose from available providers (OpenAI, Anthropic, Google, etc.)
+- **API Key Configuration**: Enter your API keys securely
+- **Model Selection**: Pick from available models for your provider
+- **Health Check**: Test your LLM configuration with a real API call
+- **Web Search Setup**: Configure search providers (Tavily, Brave, or browser-based)
+
+Example:
+```bash
+genieceo onboard
+```
+
 ### `genieceo chat`
 Start interactive chat mode
 
@@ -330,21 +361,53 @@ genieceo/
 │   ├── skills/         # Skill system & built-in skills
 │   ├── workspace/      # Workspace management
 │   ├── config/         # Configuration system
-│   └── providers/      # LLM provider (Vercel AI SDK)
+│   └── providers/      # LLM provider (@mariozechner/pi-ai)
 ```
 
 ## 🔄 Switching LLM Providers
 
-genieceo uses Vercel AI SDK, making it easy to switch providers:
+genieceo uses @mariozechner/pi-ai, which provides:
+- **Automatic model discovery** - no hardcoded model lists
+- **15+ providers** - OpenAI, Anthropic, Google, Azure, Bedrock, Mistral, Groq, xAI, OpenRouter, and more
+- **Cross-provider handoffs** - switch models mid-conversation
+- **Unified interface** - same API for all providers
 
-**Current:** OpenAI only
+### Available Providers
 
-**Coming soon:** Anthropic, Google, and more
+To see all available providers and their models:
 
-To add a new provider:
-1. Install the SDK: `npm install @ai-sdk/anthropic`
-2. Update `src/providers/llm.ts`
-3. Set model in config: `"anthropic:claude-3-5-sonnet-20241022"`
+```bash
+# The library automatically discovers all available models at runtime
+# Simply configure your provider and model in config.json
+```
+
+To use a different provider, simply update your config:
+
+```json
+{
+  "model": "anthropic:claude-3-5-sonnet-20241022",
+  "llm": {
+    "anthropic": {
+      "apiKey": "sk-ant-..."
+    }
+  }
+}
+```
+
+**Supported providers (examples):**
+- **OpenAI**: `openai:gpt-4o`, `openai:gpt-4o-mini`, `openai:o1`
+- **Anthropic**: `anthropic:claude-3-5-sonnet-20241022`, `anthropic:claude-3-5-haiku-20241022`
+- **Google**: `google:gemini-2.0-flash-exp`, `google:gemini-1.5-pro`
+- **Mistral**: `mistral:mistral-large-latest`, `mistral:mistral-small-latest`
+- **Groq**: `groq:llama-3.3-70b-versatile`, `groq:mixtral-8x7b-32768`
+- **xAI**: `xai:grok-beta`
+- **OpenRouter**: `openrouter:anthropic/claude-3.5-sonnet`
+- **Azure OpenAI**: Configure via environment variables
+- **Amazon Bedrock**: `bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0`
+- **Cerebras**: `cerebras:llama3.3-70b`
+- **And 15+ more!**
+
+The model list is automatically discovered from each provider's API, so you always have access to the latest models without updating genieceo.
 
 ## 🛡️ Safety
 

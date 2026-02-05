@@ -34,14 +34,17 @@ export async function initCommand(): Promise<void> {
       });
       
       console.log(chalk.gray('\nTo fix:'));
-      console.log(chalk.gray('  • Edit config: ' + configManager.getConfigPath()));
-      console.log(chalk.gray('  • Add your API keys to llm.openai.apiKey in the config file'));
+      console.log(chalk.gray('  • Run the setup wizard: genieceo onboard'));
+      console.log(chalk.gray('  • Or edit config manually: ' + configManager.getConfigPath()));
     } else {
       console.log(chalk.green('\n✓ Configuration is valid'));
     }
 
     console.log(chalk.blue.bold('\n✨ genieceo is ready!'));
     console.log(chalk.gray('\nNext steps:'));
+    if (!validation.valid) {
+      console.log(chalk.gray('  • Complete setup: genieceo onboard (recommended)'));
+    }
     console.log(chalk.gray('  • Run: genieceo chat'));
     console.log(chalk.gray('  • Or: genieceo chat -m "your message"'));
     console.log(chalk.gray('  • Check status: genieceo status\n'));

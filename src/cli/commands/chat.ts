@@ -4,7 +4,11 @@ import * as readline from 'readline';
 import { getConfigManager } from '../../config/manager';
 import { getWorkspaceManager } from '../../workspace/manager';
 import { createAgent } from '../../agent';
-import type { CoreMessage } from 'ai';
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
 /**
  * Chat command
@@ -88,7 +92,7 @@ async function handleInteractiveMode(agent: any): Promise<void> {
     prompt: chalk.green('You> '),
   });
 
-  const history: CoreMessage[] = [];
+  const history: ChatMessage[] = [];
 
   rl.prompt();
 

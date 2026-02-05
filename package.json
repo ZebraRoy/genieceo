@@ -25,8 +25,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.0.9",
-    "ai": "^4.1.4",
+    "@mariozechner/pi-ai": "^0.51.6",
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "ora": "^5.4.1",

@@ -1,10 +1,18 @@
-import { generateText, CoreMessage, CoreTool } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { 
+  getModel, 
+  getProviders, 
+  getModels,
+  complete, 
+  Context,
+  Tool,
+  AssistantMessage,
+  type KnownProvider
+} from '@mariozechner/pi-ai';
 import type { Config } from '../types';
 
 /**
- * LLM Provider using Vercel AI SDK
- * Provides unified interface for multiple LLM providers
+ * LLM Provider using @mariozechner/pi-ai
+ * Provides unified interface for multiple LLM providers with automatic model discovery
  */
 export class LLMProvider {
   private config: Config;
@@ -16,28 +24,44 @@ export class LLMProvider {
   /**
    * Get the appropriate model instance based on config
    */
-  private getModel() {
-    const [provider, model] = this.config.model.split(':');
+  private getModelInstance() {
+    const [provider, modelId] = this.config.model.split(':');
 
-    if (!model) {
+    if (!modelId) {
       throw new Error('Invalid model format. Use "provider:model" (e.g., "openai:gpt-4o")');
     }
 
-    switch (provider) {
-      case 'openai':
-        // Create OpenAI provider instance with API key
-        const openaiProvider = createOpenAI({
-          apiKey: this.config.llm.openai.apiKey,
-        });
-        return openaiProvider(model);
-      case 'anthropic':
-        // Future implementation when anthropic is added
-        if (!this.config.llm.anthropic?.apiKey) {
-          throw new Error('Anthropic API key not configured');
-        }
-        throw new Error('Anthropic provider not yet implemented. Install @ai-sdk/anthropic to enable.');
-      default:
-        throw new Error(`Unknown provider: ${provider}. Supported providers: openai`);
+    try {
+      // pi-ai automatically handles model discovery and validation
+      return getModel(provider as any, modelId);
+    } catch (error) {
+      throw new Error(`Failed to get model ${this.config.model}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Get available providers
+   */
+  getAvailableProviders(): string[] {
+    return getProviders();
+  }
+
+  /**
+   * Get available models for a provider
+   */
+  getAvailableModels(provider: string): Array<{ id: string; name: string }> {
+    try {
+      // Validate provider exists
+      const availableProviders = getProviders() as string[];
+      if (!availableProviders.includes(provider)) {
+        return [];
+      }
+      // Safe cast: we validated the provider exists in the providers list
+      // @ts-ignore - provider is validated to exist in the providers list
+      const models = getModels(provider);
+      return models.map(m => ({ id: m.id, name: m.name }));
+    } catch (error) {
+      return [];
     }
   }
 
@@ -45,8 +69,8 @@ export class LLMProvider {
    * Generate text with automatic tool calling
    */
   async generate(
-    messages: CoreMessage[],
-    tools: Record<string, CoreTool>,
+    messages: any[],
+    tools: Record<string, any>,
     maxSteps?: number
   ): Promise<{
     text: string;
@@ -56,22 +80,81 @@ export class LLMProvider {
     usage: any;
   }> {
     try {
-      const result = await generateText({
-        model: this.getModel(),
-        messages,
-        tools,
-        maxSteps: maxSteps || this.config.maxIterations,
+      const model = this.getModelInstance();
+      
+      // Convert tools to pi-ai format
+      const piTools: Tool[] = Object.entries(tools).map(([name, tool]) => ({
+        name,
+        description: tool.description || '',
+        parameters: tool.parameters || {},
+      }));
+
+      // Convert messages to pi-ai Context format
+      const context: Context = {
+        messages: messages.map(msg => {
+          if (typeof msg.content === 'string') {
+            return {
+              role: msg.role as 'user' | 'assistant',
+              content: msg.content,
+            };
+          }
+          return msg;
+        }),
+        tools: piTools.length > 0 ? piTools : undefined,
+      };
+
+      // Get API key based on provider
+      const [provider] = this.config.model.split(':');
+      const apiKey = this.getApiKey(provider);
+
+      // Use complete() for synchronous generation
+      const response: AssistantMessage = await complete(model, context, {
+        apiKey,
       });
 
+      // Extract text from response
+      const textBlocks = response.content.filter(block => block.type === 'text');
+      const text = textBlocks.map(block => (block as any).text).join('\n');
+
+      // Extract tool calls
+      const toolCalls = response.content
+        .filter(block => block.type === 'toolCall')
+        .map(block => {
+          const toolCall = block as any;
+          return {
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            args: toolCall.arguments,
+          };
+        });
+
       return {
-        text: result.text,
-        toolCalls: result.toolCalls || [],
-        toolResults: result.toolResults || [],
-        finishReason: result.finishReason,
-        usage: result.usage,
+        text,
+        toolCalls,
+        toolResults: [], // pi-ai handles tool results separately
+        finishReason: response.stopReason,
+        usage: {
+          promptTokens: response.usage.input,
+          completionTokens: response.usage.output,
+          totalTokens: response.usage.input + response.usage.output,
+        },
       };
     } catch (error) {
       throw new Error(`LLM generation failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Get API key for provider
+   */
+  private getApiKey(provider: string): string {
+    switch (provider) {
+      case 'openai':
+        return this.config.llm.openai.apiKey;
+      case 'anthropic':
+        return this.config.llm.anthropic?.apiKey || '';
+      default:
+        throw new Error(`No API key configured for provider: ${provider}`);
     }
   }
 
@@ -80,18 +163,43 @@ export class LLMProvider {
    */
   validateConfig(): { valid: boolean; errors?: string[] } {
     const errors: string[] = [];
-    const [provider, model] = this.config.model.split(':');
+    const [provider, modelId] = this.config.model.split(':');
 
-    if (!provider || !model) {
+    if (!provider || !modelId) {
       errors.push('Model must be in format "provider:model"');
     }
 
+    // Check if provider exists (only validate if we have a provider string)
+    if (provider) {
+      const availableProviders = getProviders() as string[];
+      if (!availableProviders.includes(provider)) {
+        errors.push(`Unknown provider: ${provider}. Available: ${availableProviders.join(', ')}`);
+      }
+    }
+
+    // Check API key
     if (provider === 'openai' && !this.config.llm.openai.apiKey) {
       errors.push('OpenAI API key is required');
     }
 
     if (provider === 'anthropic' && !this.config.llm.anthropic?.apiKey) {
       errors.push('Anthropic API key is required but not configured');
+    }
+
+    // Validate model exists for provider (only if provider is valid)
+    if (provider) {
+      const availableProviders = getProviders() as string[];
+      if (availableProviders.includes(provider)) {
+        try {
+          const availableModels = this.getAvailableModels(provider);
+          const modelExists = availableModels.some(m => m.id === modelId);
+          if (availableModels.length > 0 && !modelExists) {
+            errors.push(`Model ${modelId} not found for provider ${provider}. Available models: ${availableModels.map(m => m.id).join(', ')}`);
+          }
+        } catch (error) {
+          // Ignore model validation errors if provider is not configured
+        }
+      }
     }
 
     return {

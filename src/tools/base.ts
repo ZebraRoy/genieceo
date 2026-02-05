@@ -1,10 +1,9 @@
 import { z } from 'zod';
-import { tool as createVercelTool } from 'ai';
 import type { Tool as ToolType } from '../types';
 
 /**
  * Tool Registry
- * Central registry for all tools with conversion to Vercel AI SDK format
+ * Central registry for all tools with conversion to pi-ai format
  */
 
 export class ToolRegistry {
@@ -57,20 +56,20 @@ export class ToolRegistry {
   }
 
   /**
-   * Convert to Vercel AI SDK tool format
+   * Convert to pi-ai tool format
    */
-  toVercelTools(): Record<string, any> {
-    const vercelTools: Record<string, any> = {};
+  toPiAiTools(): Record<string, any> {
+    const piTools: Record<string, any> = {};
 
     for (const [name, tool] of this.tools) {
-      vercelTools[name] = createVercelTool({
+      piTools[name] = {
         description: tool.description,
         parameters: tool.parameters,
         execute: tool.execute,
-      });
+      };
     }
 
-    return vercelTools;
+    return piTools;
   }
 
   /**

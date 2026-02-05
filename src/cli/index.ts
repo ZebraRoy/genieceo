@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { initCommand } from './commands/init';
 import { chatCommand } from './commands/chat';
 import { statusCommand } from './commands/status';
+import { onboardCommand } from './commands/onboard';
 
 const program = new Command();
 
@@ -18,6 +19,14 @@ program
   .description('Initialize workspace and configuration')
   .action(async () => {
     await initCommand();
+  });
+
+// Onboard command
+program
+  .command('onboard')
+  .description('Interactive setup wizard for LLM and web search configuration')
+  .action(async () => {
+    await onboardCommand();
   });
 
 // Chat command

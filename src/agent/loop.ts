@@ -3,11 +3,15 @@ import { LLMProvider } from '../providers/llm';
 import { ToolRegistry } from '../tools/base';
 import { SkillLoader } from '../skills/loader';
 import { ContextBuilder } from './context';
-import { CoreMessage } from 'ai';
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
 /**
  * Agent Loop
- * Main agent execution logic using Vercel AI SDK
+ * Main agent execution logic using @mariozechner/pi-ai
  */
 export class AgentLoop {
   private config: Config;
@@ -37,7 +41,7 @@ export class AgentLoop {
       const systemPrompt = await this.contextBuilder.buildSystemPrompt();
 
       // Prepare messages
-      const messages: CoreMessage[] = [
+      const messages: ChatMessage[] = [
         {
           role: 'system',
           content: systemPrompt,
@@ -48,8 +52,8 @@ export class AgentLoop {
         },
       ];
 
-      // Get tools in Vercel AI SDK format
-      const tools = this.toolRegistry.toVercelTools();
+      // Get tools in pi-ai format
+      const tools = this.toolRegistry.toPiAiTools();
 
       // Generate response with automatic tool calling
       const result = await this.llmProvider.generate(
@@ -69,14 +73,14 @@ export class AgentLoop {
    */
   async runWithHistory(
     userMessage: string,
-    history: CoreMessage[]
-  ): Promise<{ response: string; updatedHistory: CoreMessage[] }> {
+    history: ChatMessage[]
+  ): Promise<{ response: string; updatedHistory: ChatMessage[] }> {
     try {
       // Build system prompt
       const systemPrompt = await this.contextBuilder.buildSystemPrompt();
 
       // Prepare messages with history
-      const messages: CoreMessage[] = [
+      const messages: ChatMessage[] = [
         {
           role: 'system',
           content: systemPrompt,
@@ -88,8 +92,8 @@ export class AgentLoop {
         },
       ];
 
-      // Get tools in Vercel AI SDK format
-      const tools = this.toolRegistry.toVercelTools();
+      // Get tools in pi-ai format
+      const tools = this.toolRegistry.toPiAiTools();
 
       // Generate response with automatic tool calling
       const result = await this.llmProvider.generate(
