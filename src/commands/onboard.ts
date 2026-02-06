@@ -3,7 +3,8 @@ import { complete, getModel, getModels, getProviders } from "@mariozechner/pi-ai
 
 import { loadConfig, saveConfig } from "../config/store.js";
 import type { GenieCeoConfig, LlmProfile } from "../config/schema.js";
-import { ensureWorkspace } from "../workspace/bootstrap.js";
+import { ensureWorkspace, installBuiltinSkills } from "../workspace/bootstrap.js";
+import { getWorkspaceRoot } from "../workspace/paths.js";
 
 type WebSearchProvider = "brave" | "tavily" | "duckduckgo";
 
@@ -186,9 +187,46 @@ function defaultProfileName(profiles: Record<string, LlmProfile>, profile: LlmPr
 }
 
 export async function runOnboard(): Promise<void> {
-  await ensureWorkspace();
+  const workspaceRoot = getWorkspaceRoot();
+  await ensureWorkspace(workspaceRoot);
 
-  const config = await loadConfig();
+  const config = await loadConfig(workspaceRoot);
+
+  const builtinSkills = (await checkbox<string>({
+    message: "Select built-in skills to install (space to toggle, enter to confirm).",
+    choices: [
+      {
+        name: "author-skills — guidance for writing great SKILL.md files",
+        value: "author-skills",
+        checked: true,
+      },
+      {
+        name: "install-from-github — install skills by copying from GitHub into ~/.genieceo/skills",
+        value: "install-from-github",
+        checked: true,
+      },
+      {
+        name: "discover-skills — discover community skills (no npx skills add)",
+        value: "discover-skills",
+        checked: true,
+      },
+    ],
+  })) as string[];
+
+  const overwriteSkills = await confirm({
+    message: "Overwrite existing built-in skills if they already exist?",
+    default: false,
+  });
+
+  const installRes = await installBuiltinSkills(workspaceRoot, builtinSkills, { overwrite: overwriteSkills });
+  if (installRes.installed.length > 0) {
+    console.log(`Installed skills into ~/.genieceo/skills/: ${installRes.installed.join(", ")}`);
+  }
+  if (installRes.skipped.length > 0) {
+    console.log(
+      `Skipped ${installRes.skipped.length} skill(s):\n` + installRes.skipped.map((s) => `- ${s.name}: ${s.reason}`).join("\n")
+    );
+  }
 
   const webSearch = await pickWebSearchOrder(config.webSearch);
 
@@ -246,7 +284,7 @@ export async function runOnboard(): Promise<void> {
     },
   };
 
-  await saveConfig(updated);
+  await saveConfig(updated, workspaceRoot);
   console.log("Saved configuration to ~/.genieceo/config.json");
 }
 

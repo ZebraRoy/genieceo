@@ -19,6 +19,10 @@ export function getLogsDir(workspaceRoot: string = getWorkspaceRoot()): string {
   return path.join(workspaceRoot, "logs");
 }
 
+export function getSkillsDir(workspaceRoot: string = getWorkspaceRoot()): string {
+  return path.join(workspaceRoot, "skills");
+}
+
 export function getConfigPath(workspaceRoot: string = getWorkspaceRoot()): string {
   return path.join(workspaceRoot, "config.json");
 }

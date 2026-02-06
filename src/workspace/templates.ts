@@ -7,6 +7,7 @@ export const PROMPT_TEMPLATE_FILES = [
   "SOUL.md",
   "USER.md",
   "TOOLS.md",
+  "SKILLS.md",
 ] as const;
 
 export type PromptTemplateFile = (typeof PROMPT_TEMPLATE_FILES)[number];
