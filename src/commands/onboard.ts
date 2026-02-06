@@ -1,10 +1,11 @@
 import { checkbox, confirm, input, password, select } from "@inquirer/prompts";
 import { complete, getModel, getModels, getProviders } from "@mariozechner/pi-ai";
+import { stat } from "node:fs/promises";
 
 import { loadConfig, saveConfig } from "../config/store.js";
 import type { GenieCeoConfig, LlmProfile } from "../config/schema.js";
 import { ensureWorkspace, installBuiltinSkills } from "../workspace/bootstrap.js";
-import { getWorkspaceRoot } from "../workspace/paths.js";
+import { getConfigPath, getWorkspaceRoot } from "../workspace/paths.js";
 
 type WebSearchProvider = "brave" | "tavily" | "duckduckgo";
 
@@ -186,101 +187,178 @@ function defaultProfileName(profiles: Record<string, LlmProfile>, profile: LlmPr
   return `${base}#${i}`;
 }
 
+async function exists(p: string): Promise<boolean> {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function runOnboard(): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
   await ensureWorkspace(workspaceRoot);
 
   const config = await loadConfig(workspaceRoot);
 
-  const builtinSkills = (await checkbox<string>({
-    message: "Select built-in skills to install (space to toggle, enter to confirm).",
+  type SetupStep = "skills" | "access" | "websearch" | "llm";
+
+  const existingProfiles = Object.keys(config.llm?.profiles ?? {}).length;
+  const configPath = getConfigPath(workspaceRoot);
+  const hasConfigFile = await exists(configPath);
+
+  const selectedSteps = (await checkbox<SetupStep>({
+    message:
+      "Select setup steps to run (space to toggle, enter to confirm). Skipped steps keep existing configuration.",
     choices: [
+      { name: "Built-in skills (install/overwrite)", value: "skills", checked: false },
+      { name: "Filesystem access mode (protected vs free)", value: "access", checked: false },
+      { name: "Web search providers + API keys", value: "websearch", checked: false },
       {
-        name: "author-skills — guidance for writing great SKILL.md files",
-        value: "author-skills",
-        checked: true,
-      },
-      {
-        name: "install-from-github — install skills by copying from GitHub into ~/.genieceo/skills",
-        value: "install-from-github",
-        checked: true,
-      },
-      {
-        name: "discover-skills — discover community skills (no npx skills add)",
-        value: "discover-skills",
-        checked: true,
+        name: "LLM profiles (providers/models/keys) + active profile",
+        value: "llm",
+        checked: existingProfiles === 0, // required on first setup
       },
     ],
-  })) as string[];
+  })) as SetupStep[];
 
-  const overwriteSkills = await confirm({
-    message: "Overwrite existing built-in skills if they already exist?",
-    default: false,
-  });
-
-  const installRes = await installBuiltinSkills(workspaceRoot, builtinSkills, { overwrite: overwriteSkills });
-  if (installRes.installed.length > 0) {
-    console.log(`Installed skills into ~/.genieceo/skills/: ${installRes.installed.join(", ")}`);
-  }
-  if (installRes.skipped.length > 0) {
-    console.log(
-      `Skipped ${installRes.skipped.length} skill(s):\n` + installRes.skipped.map((s) => `- ${s.name}: ${s.reason}`).join("\n")
-    );
+  if (hasConfigFile && selectedSteps.length === 0) {
+    console.log("No steps selected. Will save config as-is (normalized) for migration/upgrade.");
   }
 
-  const webSearch = await pickWebSearchOrder(config.webSearch);
+  if (selectedSteps.includes("skills")) {
+    const builtinSkills = (await checkbox<string>({
+      message: "Select built-in skills to install (space to toggle, enter to confirm).",
+      choices: [
+        {
+          name: "author-skills — guidance for writing great SKILL.md files",
+          value: "author-skills",
+          checked: true,
+        },
+        {
+          name: "install-from-github — install skills by copying from GitHub into ~/.genieceo/skills",
+          value: "install-from-github",
+          checked: true,
+        },
+        {
+          name: "discover-skills — discover community skills (no npx skills add)",
+          value: "discover-skills",
+          checked: true,
+        },
+      ],
+    })) as string[];
+
+    const overwriteSkills = await confirm({
+      message: "Overwrite existing built-in skills if they already exist?",
+      default: false,
+    });
+
+    const installRes = await installBuiltinSkills(workspaceRoot, builtinSkills, { overwrite: overwriteSkills });
+    if (installRes.installed.length > 0) {
+      console.log(`Installed skills into ~/.genieceo/skills/: ${installRes.installed.join(", ")}`);
+    }
+    if (installRes.skipped.length > 0) {
+      console.log(
+        `Skipped ${installRes.skipped.length} skill(s):\n` +
+          installRes.skipped.map((s) => `- ${s.name}: ${s.reason}`).join("\n")
+      );
+    }
+  }
+
+  const accessMode =
+    selectedSteps.includes("access")
+      ? await select<"protected" | "free">({
+          message: "Filesystem access mode for tools (file tools + run_command).",
+          choices: [
+            { name: "Completely free (default) — allow access to any path", value: "free" },
+            { name: "Protected — only allow ~/.genieceo and the current folder", value: "protected" },
+          ],
+          default: (config.execution?.fileAccessMode as any) === "protected" ? "protected" : "free",
+        })
+      : ((config.execution?.fileAccessMode as any) === "protected" ? "protected" : "free");
+
+  const webSearch = selectedSteps.includes("websearch") ? await pickWebSearchOrder(config.webSearch) : config.webSearch;
 
   const profiles: Record<string, LlmProfile> = { ...(config.llm?.profiles ?? {}) };
 
-  // Configure 1+ profiles (supports multiple models per provider).
-  while (true) {
-    const profile = await configureProfile();
-    if (!profile) {
-      const again = await confirm({ message: "No profile added. Try configuring another profile?", default: true });
-      if (!again && Object.keys(profiles).length > 0) break;
-      if (!again) continue;
-      continue;
+  let activeProfile: string | undefined = config.llm?.activeProfile;
+  if (selectedSteps.includes("llm")) {
+    const alreadyHasProfiles = Object.keys(profiles).length > 0;
+    let addFirst = true;
+    if (alreadyHasProfiles) {
+      addFirst = await confirm({ message: "Add a new LLM profile?", default: false });
     }
 
-    const suggested = defaultProfileName(profiles, profile);
-    const name = (await input({
-      message: "Profile name (used to select active profile).",
-      default: suggested,
-      validate: (v) => {
-        const s = v.trim();
-        if (!s) return "Required";
-        if (profiles[s]) return "Name already exists";
-        return true;
-      },
-    })).trim();
+    // Configure 0+ profiles (but require at least 1 overall).
+    if (addFirst || !alreadyHasProfiles) {
+      while (true) {
+        const profile = await configureProfile();
+        if (!profile) {
+          if (Object.keys(profiles).length > 0) {
+            const done = await confirm({ message: "No profile added. Finish LLM setup?", default: true });
+            if (done) break;
+            continue;
+          }
+          const again = await confirm({ message: "No profile added yet. Try again?", default: true });
+          if (!again) throw new Error("At least one LLM profile is required to use `genieceo chat`.");
+          continue;
+        }
 
-    profiles[name] = profile;
+        const suggested = defaultProfileName(profiles, profile);
+        const name = (await input({
+          message: "Profile name (used to select active profile).",
+          default: suggested,
+          validate: (v) => {
+            const s = v.trim();
+            if (!s) return "Required";
+            if (profiles[s]) return "Name already exists";
+            return true;
+          },
+        })).trim();
 
-    const addMore = await confirm({ message: "Add another LLM profile?", default: false });
-    if (!addMore) break;
+        profiles[name] = profile;
+
+        const addMore = await confirm({ message: "Add another LLM profile?", default: false });
+        if (!addMore) break;
+      }
+    }
+
+    const profileNames = Object.keys(profiles);
+    if (profileNames.length === 0) {
+      throw new Error("No LLM profiles configured. Please run onboard again and add at least one profile.");
+    }
+
+    activeProfile = await select<string>({
+      message: "Select the active LLM profile to use for `genieceo chat`.",
+      choices: profileNames.map((n) => ({ name: n, value: n })),
+      default: activeProfile && profileNames.includes(activeProfile) ? activeProfile : profileNames[0],
+    });
   }
 
-  const profileNames = Object.keys(profiles);
-  if (profileNames.length === 0) {
-    throw new Error("No LLM profiles configured. Please run onboard again and add at least one profile.");
+  if (Object.keys(profiles).length === 0) {
+    throw new Error(
+      "No LLM profiles configured. Please run `genieceo onboard` and select the 'LLM profiles' step to add at least one profile."
+    );
   }
-  const activeProfile = await select<string>({
-    message: "Select the active LLM profile to use for `genieceo chat`.",
-    choices: profileNames.map((n) => ({ name: n, value: n })),
-    default: config.llm?.activeProfile && profileNames.includes(config.llm.activeProfile) ? config.llm.activeProfile : profileNames[0],
-  });
+
+  if (!activeProfile || !Object.prototype.hasOwnProperty.call(profiles, activeProfile)) {
+    // Safety fallback: keep config valid even if activeProfile was removed/invalid.
+    activeProfile = Object.keys(profiles)[0];
+  }
 
   const updated: GenieCeoConfig = {
     ...config,
     version: 2,
-    webSearch: {
-      order: webSearch.order,
-      braveApiKey: webSearch.braveApiKey,
-      tavilyApiKey: webSearch.tavilyApiKey,
-    },
+    webSearch,
     llm: {
       activeProfile,
       profiles,
+    },
+    execution: {
+      ...config.execution,
+      fileAccessMode: accessMode,
+      shellAccessMode: accessMode,
     },
   };
 

@@ -1,24 +1,10 @@
-import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { Type } from "@sinclair/typebox";
 import type { Tool } from "@mariozechner/pi-ai";
 
 import type { ToolExecutionContext } from "../types.js";
-
-function expandHome(p: string): string {
-  const s = p.trim();
-  if (s === "~") return os.homedir();
-  if (s.startsWith("~/")) return path.join(os.homedir(), s.slice(2));
-  return s;
-}
-
-function isWithinRoot(rootAbs: string, targetAbs: string): boolean {
-  const root = path.resolve(rootAbs);
-  const target = path.resolve(targetAbs);
-  if (target === root) return true;
-  return target.startsWith(root + path.sep);
-}
+import { defaultShellAllowedRoots, expandHome, isWithinRoot, normalizeFileAccessMode } from "../path-access.js";
 
 function resolveCwd(ctx: ToolExecutionContext, cwdInput: string | undefined): { cwd: string; allowedRoots: string[] } {
   const enabled = Boolean((ctx.config as any)?.execution?.shell?.enabled);
@@ -32,10 +18,14 @@ function resolveCwd(ctx: ToolExecutionContext, cwdInput: string | undefined): { 
     ? ((ctx.config as any).execution.shell.allowedRoots as string[])
     : [];
 
-  const allowedRoots =
-    configuredRoots.length > 0
-      ? configuredRoots.map((r) => path.resolve(expandHome(r)))
-      : [path.resolve(ctx.workspaceRoot), path.resolve(ctx.invocationCwd)];
+  const shellAccessMode = normalizeFileAccessMode((ctx.config as any)?.execution?.shellAccessMode);
+
+  const allowedRoots = defaultShellAllowedRoots({
+    workspaceRoot: ctx.workspaceRoot,
+    invocationCwd: ctx.invocationCwd,
+    mode: shellAccessMode,
+    configuredRoots,
+  });
 
   // If no cwd is specified, default to the directory where `genieceo chat` was launched.
   if (!cwdInput || !String(cwdInput).trim()) {

@@ -4,20 +4,45 @@ import path from "node:path";
 import type { Tool } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 
-import { resolveWithinWorkspace } from "../path-safety.js";
+import { normalizeFileAccessMode, resolveFileToolPath, type FileScope } from "../path-access.js";
 import type { ToolExecutionContext } from "../types.js";
 
 export function registerFileTools(registry: { register: (tool: Tool, handler: (args: any) => Promise<string>) => void }, ctx: ToolExecutionContext) {
+  const normalizeScope = (v: unknown): FileScope => {
+    const s = String(v ?? "").trim();
+    if (s === "project") return "project";
+    if (s === "tmp") return "tmp";
+    return "workspace";
+  };
+
+  const scopeSchema = Type.Optional(
+    Type.Union([Type.Literal("workspace"), Type.Literal("project"), Type.Literal("tmp")], {
+      description:
+        "Where to resolve relative paths: 'workspace' (~/.genieceo), 'project' (where genieceo chat was launched), or 'tmp' (~/.genieceo/tmp). Default: 'workspace'.",
+    })
+  );
+
+  const fileAccessMode = normalizeFileAccessMode((ctx.config as any)?.execution?.fileAccessMode);
+
   registry.register(
     {
       name: "read_file",
-      description: "Read a UTF-8 text file from the GenieCEO workspace.",
+      description:
+        "Read a UTF-8 text file. By default reads from the GenieCEO workspace; can also target the invocation directory or workspace tmp via 'scope'.",
       parameters: Type.Object({
         path: Type.String({ description: "Path relative to the workspace (or absolute within it)." }),
+        scope: scopeSchema,
       }),
     },
     async (args) => {
-      const p = resolveWithinWorkspace(ctx.workspaceRoot, String(args.path ?? ""));
+      const scope = normalizeScope(args.scope);
+      const p = resolveFileToolPath({
+        workspaceRoot: ctx.workspaceRoot,
+        invocationCwd: ctx.invocationCwd,
+        mode: fileAccessMode,
+        scope,
+        userPath: String(args.path ?? ""),
+      });
       return await readFile(p, "utf8");
     }
   );
@@ -25,14 +50,23 @@ export function registerFileTools(registry: { register: (tool: Tool, handler: (a
   registry.register(
     {
       name: "write_file",
-      description: "Write a UTF-8 text file inside the GenieCEO workspace (creates parent dirs).",
+      description:
+        "Write a UTF-8 text file (creates parent dirs). By default writes inside the GenieCEO workspace; can also target the invocation directory or workspace tmp via 'scope'.",
       parameters: Type.Object({
         path: Type.String({ description: "Path relative to the workspace (or absolute within it)." }),
         content: Type.String({ description: "Full file content." }),
+        scope: scopeSchema,
       }),
     },
     async (args) => {
-      const p = resolveWithinWorkspace(ctx.workspaceRoot, String(args.path ?? ""));
+      const scope = normalizeScope(args.scope);
+      const p = resolveFileToolPath({
+        workspaceRoot: ctx.workspaceRoot,
+        invocationCwd: ctx.invocationCwd,
+        mode: fileAccessMode,
+        scope,
+        userPath: String(args.path ?? ""),
+      });
       await mkdir(path.dirname(p), { recursive: true });
       await writeFile(p, String(args.content ?? ""), "utf8");
       return `Wrote ${p}`;
@@ -47,10 +81,18 @@ export function registerFileTools(registry: { register: (tool: Tool, handler: (a
         path: Type.String({ description: "Path relative to the workspace (or absolute within it)." }),
         old_text: Type.String({ description: "Exact text to replace (first occurrence)." }),
         new_text: Type.String({ description: "Replacement text." }),
+        scope: scopeSchema,
       }),
     },
     async (args) => {
-      const p = resolveWithinWorkspace(ctx.workspaceRoot, String(args.path ?? ""));
+      const scope = normalizeScope(args.scope);
+      const p = resolveFileToolPath({
+        workspaceRoot: ctx.workspaceRoot,
+        invocationCwd: ctx.invocationCwd,
+        mode: fileAccessMode,
+        scope,
+        userPath: String(args.path ?? ""),
+      });
       const oldText = String(args.old_text ?? "");
       const newText = String(args.new_text ?? "");
       const before = await readFile(p, "utf8");
@@ -67,13 +109,22 @@ export function registerFileTools(registry: { register: (tool: Tool, handler: (a
   registry.register(
     {
       name: "list_dir",
-      description: "List the contents of a directory inside the GenieCEO workspace.",
+      description:
+        "List directory contents. By default lists inside the GenieCEO workspace; can also target the invocation directory or workspace tmp via 'scope'.",
       parameters: Type.Object({
         path: Type.String({ description: "Directory path relative to the workspace (or absolute within it)." }),
+        scope: scopeSchema,
       }),
     },
     async (args) => {
-      const dir = resolveWithinWorkspace(ctx.workspaceRoot, String(args.path ?? "."));
+      const scope = normalizeScope(args.scope);
+      const dir = resolveFileToolPath({
+        workspaceRoot: ctx.workspaceRoot,
+        invocationCwd: ctx.invocationCwd,
+        mode: fileAccessMode,
+        scope,
+        userPath: String(args.path ?? "."),
+      });
       const entries = await readdir(dir, { withFileTypes: true });
       const lines: string[] = [];
       for (const ent of entries) {

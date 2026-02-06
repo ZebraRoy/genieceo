@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const WebSearchProviderSchema = z.enum(["brave", "tavily", "duckduckgo"]);
 
+const AccessModeSchema = z.enum(["protected", "free"]);
+
 const ExecutionShellSchema = z
   .object({
     enabled: z.boolean().default(true),
@@ -16,8 +18,21 @@ const ExecutionShellSchema = z
 const ExecutionSchema = z
   .object({
     shell: ExecutionShellSchema,
+    /**
+     * Controls where the built-in file tools are allowed to read/write/edit/list.
+     *
+     * - free (default): allow any path (including absolute paths outside the workspace)
+     * - protected: only allow paths within the workspace root and the invocation cwd
+     */
+    fileAccessMode: AccessModeSchema.default("free"),
+    /**
+     * Controls where `run_command` is allowed to execute.
+     *
+     * Note: If `execution.shell.allowedRoots` is non-empty, it always overrides this mode.
+     */
+    shellAccessMode: AccessModeSchema.default("free"),
   })
-  .default({ shell: { enabled: true, allowedRoots: [] } });
+  .default({ shell: { enabled: true, allowedRoots: [] }, fileAccessMode: "free", shellAccessMode: "free" });
 
 const LlmProfileSchema = z.object({
   provider: z.string().min(1),
