@@ -9,6 +9,7 @@ interface SyncCommandOptions {
   force?: boolean;
   skills?: boolean;
   templates?: boolean;
+  plugins?: boolean;
 }
 
 /**
@@ -30,7 +31,7 @@ export async function syncCommand(options: SyncCommandOptions = {}): Promise<voi
       process.exit(1);
     }
 
-    const syncAll = !options.skills && !options.templates;
+    const syncAll = !options.skills && !options.templates && !options.plugins;
     let syncedCount = 0;
 
     // Sync built-in skills
@@ -49,6 +50,15 @@ export async function syncCommand(options: SyncCommandOptions = {}): Promise<voi
         options.force || false
       );
       syncedCount += templatesCount;
+    }
+
+    // Sync plugin examples
+    if (syncAll || options.plugins) {
+      const pluginsCount = await syncPluginExamples(
+        workspaceManager.getWorkspacePath(),
+        options.force || false
+      );
+      syncedCount += pluginsCount;
     }
 
     if (syncedCount === 0) {
@@ -158,6 +168,55 @@ async function syncTemplateFiles(workspacePath: string, force: boolean): Promise
       syncedCount++;
     } else {
       console.log(chalk.gray(`  - ${filename} (already exists, use --force to overwrite)`));
+    }
+  }
+
+  return syncedCount;
+}
+
+/**
+ * Sync plugin examples to workspace
+ */
+async function syncPluginExamples(workspacePath: string, force: boolean): Promise<number> {
+  // Try dist folder first, then fall back to src folder (for development)
+  let pluginExamplesDir = join(__dirname, '..', '..', 'plugins', 'examples');
+  
+  if (!existsSync(pluginExamplesDir)) {
+    // Try source directory (for development or when running from source)
+    pluginExamplesDir = join(__dirname, '..', '..', '..', 'src', 'plugins', 'examples');
+  }
+  
+  if (!existsSync(pluginExamplesDir)) {
+    console.log(chalk.yellow('⚠️  No plugin examples found in package'));
+    return 0;
+  }
+
+  let syncedCount = 0;
+  const targetDir = join(workspacePath, 'plugins', 'examples');
+  
+  // Create target directory if it doesn't exist
+  if (!existsSync(targetDir)) {
+    await mkdir(targetDir, { recursive: true });
+  }
+
+  console.log(chalk.blue('Syncing plugin examples...'));
+
+  const entries = await readdir(pluginExamplesDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith('.js')) {
+      const sourcePath = join(pluginExamplesDir, entry.name);
+      const targetPath = join(targetDir, entry.name);
+
+      const shouldCopy = force || !existsSync(targetPath);
+
+      if (shouldCopy) {
+        await copyFile(sourcePath, targetPath);
+        console.log(chalk.green(`  ✓ ${entry.name}`));
+        syncedCount++;
+      } else {
+        console.log(chalk.gray(`  - ${entry.name} (already exists, use --force to overwrite)`));
+      }
     }
   }
 

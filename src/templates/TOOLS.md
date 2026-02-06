@@ -1,86 +1,133 @@
-# Available Tools
+# Tool Usage Guidelines
 
-Complete reference for all tools available to genieceo.
+You have access to powerful tools. Here's how to use them effectively.
 
-## File Operations
+## Available Tool Categories
 
-### readFile
-Read contents of a file.
-```
-readFile(path: string) -> string
-```
+### File Operations
+- **readFile** - Read file contents (use for code, configs, skills)
+- **writeFile** - Create or overwrite files
+- **listDir** - List directory contents
 
-### writeFile
-Create or overwrite a file.
-```
-writeFile(path: string, content: string) -> void
-```
+**Best Practices:**
+- Always read files before editing them
+- Use workspace paths for agent files: `~/.genieceo/workspace/`
+- Read skill files when you need specialized capabilities
 
-### listDir
-List directory contents.
-```
-listDir(path: string) -> string[]
-```
+### Shell Execution
+- **executeCommand** - Run shell commands with safety checks
 
-## Shell Commands
+**Best Practices:**
+- Explain what command you're running and why
+- Use for: git, npm, installing dependencies, system commands
+- Dangerous commands are blocked by default (rm -rf, etc.)
+- Commands timeout after 30s by default
 
-### executeCommand
-Run shell commands safely.
-```
-executeCommand(command: string, workingDir?: string) -> { stdout, stderr, exitCode }
-```
+**Common patterns:**
+```bash
+# Install plugin dependencies
+executeCommand('cd ~/.genieceo/workspace/plugins && npm install discord.js')
 
-**Safety features**:
-- Configurable timeout (default 30s)
-- Dangerous commands blocked by default
-- Workspace restrictions available
+# Check plugin status
+executeCommand('genieceo plugin list')
 
-## Web Access
-
-### webSearch
-Search the web using configured providers (Tavily, Brave, or browser fallback).
-```
-webSearch(query: string, maxResults?: number) -> SearchResult[]
+# Reload plugins after install
+executeCommand('genieceo plugin reload')
 ```
 
-Returns search results with titles, URLs, and content snippets.
+### Web Search
+- **webSearch** - Search the web for current information
 
-## Subagents
+**When to use:**
+- Need current/recent information
+- Library documentation or API details
+- Platform SDK information (e.g., "Line Messaging API Node.js SDK")
+- Best practices for integrations
 
-### spawnSubagent
-Delegate complex tasks to background agents.
+### Subagent Delegation
+- **spawnSubagent** - Create background agents for complex tasks
+
+**When to use:**
+- Complex multi-step tasks that would clutter your context
+- Independent tasks that can run in parallel
+- Research that requires deep investigation
+
+## Tool Calling Patterns
+
+### Progressive Loading
+
+Don't load everything at once. Use tools to discover what you need:
+
 ```
-spawnSubagent(task: string, context?: string) -> SubagentResult
+1. User: "Integrate with Line"
+2. You think: "I need to create a Line plugin"
+3. webSearch("Line Messaging API Node.js SDK documentation")
+4. Read example plugin: readFile('~/.genieceo/workspace/../src/plugins/examples/discord.js')
+5. Generate plugin code
+6. executeCommand('genieceo plugin install line --code "..."')
 ```
 
-Use for time-consuming or complex tasks that can run independently.
+### Skills on Demand
 
-## GenieCEO Tools (Multi-Agent Mode)
+Skills extend your capabilities. When you need specialized knowledge:
 
-### Staff Management
-- **defineStaff**: Create new staff types (api-builder, debugger, etc.)
-- **spawnStaff**: Start staff on a task
-- **waitForStaff**: Get completion summary
-- **checkStaffStatus**: Check staff progress
-- **listStaffTypes**: Show available staff
-- **readStaffPlan**: Read detailed findings
+```
+1. Check available skills in system prompt
+2. Read the skill: readFile('~/.genieceo/workspace/skills/builtin/integration/SKILL.md')
+3. Follow skill instructions
+```
 
-### Service Management
-- **startService**: Launch web servers, APIs, webhooks, daemons
-- **stopService**: Stop running services
-- **restartService**: Restart services
-- **listServices**: Show all services
-- **checkServiceHealth**: Check service status
-- **viewServiceLogs**: Debug services
+### Memory and Context
 
-### Memory Tools
-- **remember**: Store information in working memory
-- **recall**: Retrieve stored information
-- **curateMemory**: Save to long-term memory
-- **readLongTermMemory**: Access historical knowledge
-- **searchMemory**: Search across memories
-- **viewContextBudget**: Check token usage
+Keep your context clean:
 
-## Customizing Tools
+```
+- Write important facts: writeFile('~/.genieceo/workspace/memory/MEMORY.md', '...')
+- Use daily logs: writeFile('~/.genieceo/workspace/memory/2026-02-06.md', '...')
+- Delegate complex research to subagents
+```
 
-Users can edit this file to document custom tools or change behavior guidelines.
+## Integration Tool Workflow
+
+When integrating with external platforms:
+
+### 1. Research Phase
+```bash
+webSearch("[Platform] API Node.js SDK")
+webSearch("[Platform] webhook integration guide")
+```
+
+### 2. Read Examples
+```bash
+readFile('src/plugins/examples/discord.js')  # If similar platform
+readFile('~/.genieceo/workspace/skills/builtin/integration/SKILL.md')
+```
+
+### 3. Generate Plugin
+Create JavaScript plugin code using platform's SDK
+
+### 4. Install Plugin
+```bash
+executeCommand('genieceo plugin install <name> --code "..."')
+```
+
+### 5. Configure
+Tell user to:
+1. Add config to `~/.genieceo/config.json`
+2. Run `genieceo plugin reload`
+
+## Error Handling
+
+When tools fail:
+
+1. **Read the error message carefully**
+2. **Check prerequisites** (API keys, dependencies, permissions)
+3. **Try alternative approaches** (different tool, different method)
+4. **Ask for clarification** if user input is needed
+
+## Performance Tips
+
+1. **Batch related operations** - don't make multiple small tool calls when one would do
+2. **Read skills once** - cache skill knowledge in your context
+3. **Use subagents for heavy work** - keep your context lean
+4. **Write memory incrementally** - don't lose important information

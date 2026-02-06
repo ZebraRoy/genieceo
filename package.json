@@ -1,6 +1,6 @@
 {
   "name": "genieceo",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "AI CEO Agent - Autonomous development workflow management",
   "main": "dist/index.js",
   "bin": {
@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "src/templates",
-    "src/skills/builtin"
+    "src/skills/builtin",
+    "src/plugins/examples"
   ],
   "scripts": {
     "build": "tsc",

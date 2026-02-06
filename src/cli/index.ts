@@ -73,10 +73,11 @@ program
 // Sync command
 program
   .command('sync')
-  .description('Sync workspace with latest built-in skills and templates')
+  .description('Sync workspace with latest built-in skills, templates, and plugin examples')
   .option('-f, --force', 'Force overwrite existing files')
   .option('--skills', 'Sync built-in skills only')
   .option('--templates', 'Sync template files only')
+  .option('--plugins', 'Sync plugin examples only')
   .action(async (options) => {
     await syncCommand(options);
   });

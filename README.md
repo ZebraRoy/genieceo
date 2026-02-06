@@ -445,18 +445,19 @@ genieceo onboard
 Show configuration and workspace status
 
 ### `genieceo sync`
-Sync workspace with latest built-in skills and templates
+Sync workspace with latest built-in skills, templates, and plugin examples
 
-This command updates your workspace with the latest built-in skills and template files from the package. Useful after upgrading genieceo to get new skills.
+This command updates your workspace with the latest built-in skills, template files, and plugin examples from the package. Useful after upgrading genieceo to get new skills and examples.
 
 **Options:**
 - `-f, --force` - Force overwrite existing files
 - `--skills` - Sync built-in skills only
 - `--templates` - Sync template files only
+- `--plugins` - Sync plugin examples only
 
 **Example:**
 ```bash
-# Sync everything (skills and templates)
+# Sync everything (skills, templates, and plugin examples)
 genieceo sync
 
 # Force overwrite existing files
@@ -467,6 +468,9 @@ genieceo sync --skills
 
 # Sync only templates
 genieceo sync --templates
+
+# Sync only plugin examples
+genieceo sync --plugins
 ```
 
 ### `genieceo plugin`
