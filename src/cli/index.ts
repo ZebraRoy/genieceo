@@ -13,13 +13,7 @@ const program = new Command();
 program
   .name('genieceo')
   .description('AI CEO Agent - Manage your development workflow with an autonomous agent')
-  .version('0.1.0')
-  .option('-p, --port <number>', 'Port to listen on (default: 3000)')
-  .option('-t, --auth-token <token>', 'Authentication token for requests')
-  .action(async (options) => {
-    // Default action: start webhook server
-    await serveCommand(options);
-  });
+  .version('0.1.0');
 
 // Init command
 program
@@ -52,6 +46,16 @@ program
   .option('-m, --message <text>', 'Send a single message instead of interactive mode')
   .action(async (options) => {
     await ceoCommand(options);
+  });
+
+// Serve command
+program
+  .command('serve')
+  .description('Start the webhook server')
+  .option('-p, --port <number>', 'Port to listen on (default: 3000)')
+  .option('-t, --auth-token <token>', 'Authentication token for requests')
+  .action(async (options) => {
+    await serveCommand(options);
   });
 
 // Plugin command
