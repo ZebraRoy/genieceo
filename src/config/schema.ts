@@ -1,74 +1,87 @@
-import { z } from 'zod';
-import { homedir } from 'os';
-import { join } from 'path';
+import { z } from "zod";
 
-/**
- * Zod schema for configuration validation
- */
+export const WebSearchProviderSchema = z.enum(["brave", "tavily", "duckduckgo"]);
 
-export const ConfigSchema = z.object({
-  workspace: z.string().default(join(homedir(), '.genieceo', 'workspace')),
-  model: z.string().default('openai:gpt-4o'),
-  maxIterations: z.number().int().positive().default(15),
-  llm: z.object({
-    openai: z.object({
-      apiKey: z.string(),
-    }),
-    anthropic: z.object({
-      apiKey: z.string(),
-    }).optional(),
-  }),
-  tools: z.object({
-    webSearch: z.object({
-      provider: z.enum(['auto', 'brave', 'tavily', 'browser']).default('auto').optional(),
-      brave: z.object({
-        apiKey: z.string(),
-      }).optional(),
-      tavily: z.object({
-        apiKey: z.string(),
-      }).optional(),
-      // Legacy support for old config format
-      apiKey: z.string().optional(),
-    }).default({}),
-    shell: z.object({
-      timeout: z.number().int().positive().default(30000),
-      allowDangerous: z.boolean().default(false),
-    }).default({
-      timeout: 30000,
-      allowDangerous: false,
-    }),
-  }).default({
-    webSearch: {},
-    shell: {
-      timeout: 30000,
-      allowDangerous: false,
-    },
-  }),
+const LlmProfileSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  apiKey: z.string().min(1).optional(),
+  apiBase: z.string().min(1).optional(),
 });
 
-export type ConfigType = z.infer<typeof ConfigSchema>;
+const LlmConfigV2Schema = z
+  .object({
+    activeProfile: z.string().min(1).optional(),
+    profiles: z.record(z.string().min(1), LlmProfileSchema).default({}),
+  })
+  .default({ profiles: {} });
 
-/**
- * Create default configuration
- */
-export function createDefaultConfig(): Partial<ConfigType> {
+const WebSearchSchema = z
+  .object({
+    order: z.array(WebSearchProviderSchema).default(["brave", "tavily", "duckduckgo"]),
+    braveApiKey: z.string().min(1).optional(),
+    tavilyApiKey: z.string().min(1).optional(),
+  })
+  .default({ order: ["brave", "tavily", "duckduckgo"] });
+
+const ConfigV1Schema = z.object({
+  version: z.literal(1).default(1),
+  llm: z
+    .object({
+      provider: z.string().min(1).optional(),
+      model: z.string().min(1).optional(),
+      apiKey: z.string().min(1).optional(),
+      apiBase: z.string().min(1).optional(),
+    })
+    .default({}),
+  webSearch: WebSearchSchema,
+  telemetry: z.boolean().optional(),
+});
+
+const ConfigV2Schema = z.object({
+  version: z.literal(2).default(2),
+  llm: LlmConfigV2Schema,
+  webSearch: WebSearchSchema,
+  telemetry: z.boolean().optional(),
+});
+
+export const ConfigSchema = z.preprocess((val) => {
+  if (!val || typeof val !== "object") return val;
+  const v: any = val as any;
+  const version = v.version ?? 1;
+  if (version === 2) return v;
+
+  // Migrate v1 -> v2
+  const parsedV1 = ConfigV1Schema.safeParse({ ...v, version: 1 });
+  if (!parsedV1.success) return v;
+
+  const provider = parsedV1.data.llm.provider;
+  const model = parsedV1.data.llm.model;
+  const apiKey = parsedV1.data.llm.apiKey;
+  const apiBase = parsedV1.data.llm.apiBase;
+
+  const profiles: Record<string, z.infer<typeof LlmProfileSchema>> = {};
+  let activeProfile: string | undefined;
+
+  if (provider && model) {
+    profiles.default = { provider, model, apiKey, apiBase };
+    activeProfile = "default";
+  }
+
   return {
-    workspace: join(homedir(), '.genieceo', 'workspace'),
-    model: 'openai:gpt-4o',
-    maxIterations: 15,
+    ...parsedV1.data,
+    version: 2,
     llm: {
-      openai: {
-        apiKey: '',
-      },
-    },
-    tools: {
-      webSearch: {
-        provider: 'auto',
-      },
-      shell: {
-        timeout: 30000,
-        allowDangerous: false,
-      },
+      activeProfile,
+      profiles,
     },
   };
+}, ConfigV2Schema);
+
+export type GenieCeoConfig = z.infer<typeof ConfigSchema>;
+export type LlmProfile = z.infer<typeof LlmProfileSchema>;
+
+export function getDefaultConfig(): GenieCeoConfig {
+  return ConfigSchema.parse({ version: 2 });
 }
+
