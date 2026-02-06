@@ -8,6 +8,7 @@ import { getWorkspaceRoot } from "./workspace/paths.js";
 import { runOnboard } from "./commands/onboard.js";
 import { runChat } from "./commands/chat.js";
 import { runReset } from "./commands/reset.js";
+import { runMigrate } from "./commands/migrate.js";
 
 function getCliVersion(): string {
   try {
@@ -52,6 +53,22 @@ program
     await ensureWorkspace();
     console.log(`Workspace: ${getWorkspaceRoot()}`);
     await runReset({ all: Boolean(options.all) });
+  });
+
+program
+  .command("migrate")
+  .description("Update an existing ~/.genieceo workspace with newly shipped templates and built-in skills")
+  .option("--overwrite", "Overwrite existing prompt and skill files")
+  .option("--overwrite-prompts", "Overwrite existing prompt files")
+  .option("--overwrite-skills", "Overwrite existing built-in skill files")
+  .action(async (options: { overwrite?: boolean; overwritePrompts?: boolean; overwriteSkills?: boolean }) => {
+    // runMigrate calls ensureWorkspace internally; still print location consistently.
+    console.log(`Workspace: ${getWorkspaceRoot()}`);
+    await runMigrate({
+      overwrite: Boolean(options.overwrite),
+      overwritePrompts: Boolean(options.overwritePrompts),
+      overwriteSkills: Boolean(options.overwriteSkills),
+    });
   });
 
 program.parseAsync(process.argv);

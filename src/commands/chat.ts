@@ -31,13 +31,12 @@ export async function runChat(): Promise<void> {
   const { name: profileName, profile } = getActiveLlmProfile(config);
   const model = getModelForProfile(profile);
 
-  const systemPrompt = await loadSystemPrompt(workspaceRoot);
-
   const toolRegistry = createToolRegistry({ workspaceRoot, invocationCwd: process.cwd(), config });
   const tools = toolRegistry.list() as Tool[];
 
   const context: Context = {
-    systemPrompt,
+    // Note: refresh this before each model call so SKILLS_INDEX can change between turns.
+    systemPrompt: await loadSystemPrompt(workspaceRoot),
     messages: [],
     tools,
   };
@@ -65,6 +64,9 @@ export async function runChat(): Promise<void> {
 
       const startLen = context.messages.length;
       context.messages.push(userMsg);
+
+      // Refresh system prompt each turn (skills/templates may have changed on disk).
+      context.systemPrompt = await loadSystemPrompt(workspaceRoot);
 
       const assistant = await completeWithToolLoop({
         apiKey: profile.apiKey,

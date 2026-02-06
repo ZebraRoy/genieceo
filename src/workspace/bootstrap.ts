@@ -104,6 +104,85 @@ export async function ensurePromptTemplates(
   }
 }
 
+/**
+ * Copies ALL installed prompt templates (.md files) into the workspace prompts folder.
+ * This is used by `genieceo migrate` so older workspaces can pick up newly shipped templates.
+ *
+ * By default it is non-destructive: existing files are left untouched unless overwrite=true.
+ */
+export async function syncInstalledPromptTemplates(
+  workspaceRoot: string,
+  opts: { overwrite: boolean }
+): Promise<{ copied: string[]; skipped: string[] }> {
+  const templatesDir = getInstalledTemplatesDir();
+  const promptsDir = getPromptsDir(workspaceRoot);
+  await mkdir(promptsDir, { recursive: true });
+
+  const copied: string[] = [];
+  const skipped: string[] = [];
+
+  if (!(await exists(templatesDir))) return { copied, skipped };
+
+  const entries = await readdir(templatesDir, { withFileTypes: true });
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    if (!ent.name.endsWith(".md")) continue;
+    const src = path.join(templatesDir, ent.name);
+    const dst = path.join(promptsDir, ent.name);
+    if (!opts.overwrite && (await exists(dst))) {
+      skipped.push(ent.name);
+      continue;
+    }
+    await copyFile(src, dst);
+    copied.push(ent.name);
+  }
+
+  copied.sort();
+  skipped.sort();
+  return { copied, skipped };
+}
+
+/**
+ * Copies ALL installed built-in skills into the workspace skills folder.
+ *
+ * By default it is non-destructive: existing files are left untouched unless overwrite=true.
+ * Even when overwrite=false, missing files inside an existing skill folder will be added.
+ */
+export async function syncInstalledBuiltinSkills(
+  workspaceRoot: string,
+  opts: { overwrite: boolean }
+): Promise<{ installed: string[]; overwritten: string[]; existing: string[] }> {
+  const installedDir = getInstalledBuiltinSkillsDir();
+  const skillsDir = getSkillsDir(workspaceRoot);
+  await mkdir(skillsDir, { recursive: true });
+
+  const installed: string[] = [];
+  const overwritten: string[] = [];
+  const existing: string[] = [];
+
+  if (!(await exists(installedDir))) return { installed, overwritten, existing };
+
+  const entries = await readdir(installedDir, { withFileTypes: true });
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const src = path.join(installedDir, ent.name);
+    const dst = path.join(skillsDir, ent.name);
+    const hadDst = await exists(dst);
+
+    // copyDirRecursive is intentionally "merge-like" when overwrite=false.
+    await copyDirRecursive(src, dst, opts);
+
+    if (!hadDst) installed.push(ent.name);
+    else if (opts.overwrite) overwritten.push(ent.name);
+    else existing.push(ent.name);
+  }
+
+  installed.sort();
+  overwritten.sort();
+  existing.sort();
+  return { installed, overwritten, existing };
+}
+
 export async function loadSystemPrompt(workspaceRoot: string): Promise<string> {
   const promptsDir = getPromptsDir(workspaceRoot);
   const parts: string[] = [];
