@@ -35,6 +35,14 @@ The runtime can restrict filesystem/shell access via `~/.genieceo/config.json`:
 - Default timeout: 60s (max 600s)
 - Default output limit: 50k chars combined stdout+stderr (max 200k); output is truncated to keep the most recent content
 
+## Long-running services (recommended for “run forever” tasks)
+If you need to start a command that should keep running beyond the current turn (servers, daemons, watchers), prefer the service tools:
+- `service_start`: start a background/detached process and persist its PID + metadata
+- `service_status`: check if it is still running
+- `service_list`: list managed services
+- `service_tail_logs`: inspect recent logs
+- `service_stop`: stop a managed service
+
 ## Tool-loop limits
 - Each turn is limited to **20** tool-call iterations. If you exceed this, the turn fails.
 

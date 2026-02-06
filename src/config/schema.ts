@@ -69,8 +69,13 @@ const GatewaySchema = z
      * Default is ~/.genieceo/plugins.
      */
     pluginsDir: z.string().min(1).optional(),
+    /**
+     * Optional list of managed services (by name) to ensure are running when the gateway starts.
+     * These correspond to records under ~/.genieceo/services/<name>.json created by the service tools.
+     */
+    autostartServices: z.array(z.string().min(1)).default([]),
   })
-  .default({ host: "127.0.0.1", port: 18790 });
+  .default({ host: "127.0.0.1", port: 18790, autostartServices: [] });
 
 /**
  * Channel configs are intentionally open-ended so new channels/plugins can

@@ -3,6 +3,7 @@ import type { ToolExecutionContext } from "./types.js";
 import { ToolRegistry } from "./registry.js";
 import { registerFileTools } from "./builtin/files.js";
 import { registerShellTools } from "./builtin/shell.js";
+import { registerServiceTools } from "./builtin/services.js";
 import { registerWebTools } from "./builtin/web.js";
 
 export function createToolRegistry(ctx: ToolExecutionContext): ToolRegistry {
@@ -10,6 +11,7 @@ export function createToolRegistry(ctx: ToolExecutionContext): ToolRegistry {
   registerFileTools(reg, ctx);
   registerWebTools(reg, ctx);
   registerShellTools(reg, ctx);
+  registerServiceTools(reg, ctx);
   return reg;
 }
 

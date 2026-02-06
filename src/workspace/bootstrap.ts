@@ -1,7 +1,16 @@
 import { mkdir, readFile, writeFile, copyFile, stat, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { getConfigPath, getLogsDir, getPluginsDir, getPromptsDir, getSessionsDir, getSkillsDir, getWorkspaceRoot } from "./paths.js";
+import {
+  getConfigPath,
+  getLogsDir,
+  getPluginsDir,
+  getPromptsDir,
+  getServicesDir,
+  getSessionsDir,
+  getSkillsDir,
+  getWorkspaceRoot,
+} from "./paths.js";
 import { getInstalledTemplatesDir, PROMPT_TEMPLATE_FILES } from "./templates.js";
 import { getDefaultConfig } from "../config/schema.js";
 import { getInstalledBuiltinSkillsDir } from "./builtin-skills.js";
@@ -21,6 +30,7 @@ export async function ensureWorkspace(workspaceRoot: string = getWorkspaceRoot()
   await mkdir(getPromptsDir(workspaceRoot), { recursive: true });
   await mkdir(getSessionsDir(workspaceRoot), { recursive: true });
   await mkdir(getLogsDir(workspaceRoot), { recursive: true });
+  await mkdir(getServicesDir(workspaceRoot), { recursive: true });
   await mkdir(getPluginsDir(workspaceRoot), { recursive: true });
   await mkdir(getSkillsDir(workspaceRoot), { recursive: true });
 

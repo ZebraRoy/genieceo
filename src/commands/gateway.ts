@@ -8,6 +8,7 @@ import { GatewayMessageRouter } from "../gateway/message-router.js";
 import { loadAllChannelPlugins } from "../plugins/loader.js";
 import type { ChannelAdapter } from "../plugins/types.js";
 import { plugin as builtinTelegramPlugin } from "../plugins/builtin/telegram/index.js";
+import { ensureServiceRunning } from "../services/manager.js";
 
 export async function runGateway(): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
@@ -16,6 +17,22 @@ export async function runGateway(): Promise<void> {
   const config = await loadConfig(workspaceRoot);
   const host = config.gateway.host;
   const port = config.gateway.port;
+  const autostart = Array.isArray((config.gateway as any)?.autostartServices) ? (config.gateway as any).autostartServices : [];
+
+  if (autostart.length > 0) {
+    console.log(`Autostart services: ${autostart.join(", ")}`);
+    for (const name of autostart) {
+      const svc = String(name ?? "").trim();
+      if (!svc) continue;
+      try {
+        const rec = await ensureServiceRunning({ workspaceRoot, invocationCwd: workspaceRoot, config }, svc);
+        console.log(`- ${svc}: running (pid ${rec.pid})`);
+      } catch (e: any) {
+        const msg = e?.message ? String(e.message) : String(e);
+        console.log(`- ${svc}: failed to start: ${msg}`);
+      }
+    }
+  }
 
   const router = new GatewayRouter();
   const adapters = new Map<string, ChannelAdapter>();

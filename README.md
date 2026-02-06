@@ -28,6 +28,8 @@ genieceo --help
   - Loads prompt files from `~/.genieceo/prompts/`
   - Chats with the configured model via `@mariozechner/pi-ai`
   - Executes tool calls (file tools + web tools) and persists the session to JSONL
+- `genieceo status`
+  - Shows whether the gateway is reachable and lists managed services (PIDs)
 - `genieceo gateway`
   - Runs the long-lived gateway daemon (HTTP webhooks + message channels)
   - Loads channel plugins (built-in + `~/.genieceo/plugins/*`)
@@ -43,6 +45,7 @@ genieceo --help
 - `prompts/`: prompt files loaded into the system prompt
   - `IDENTITY.md`, `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`
 - `sessions/`: chat sessions saved as JSONL
+- `services/`: managed long-running services (PID + metadata JSON)
 - `logs/`: gateway logs (and future logs)
 - `plugins/`: channel plugins loaded by `genieceo gateway`
 
@@ -66,7 +69,8 @@ genieceo --help
   },
   "gateway": {
     "host": "127.0.0.1",
-    "port": 18790
+    "port": 18790,
+    "autostartServices": []
   },
   "channels": {
     "telegram": {

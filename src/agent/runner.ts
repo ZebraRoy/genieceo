@@ -6,7 +6,7 @@ import { completeWithToolLoop, DEFAULT_MAX_TOOL_ITERATIONS, getActiveLlmProfile,
 import { createToolRegistry } from "../tools/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { loadSystemPrompt } from "../workspace/bootstrap.js";
-import { getWorkspaceRoot } from "../workspace/paths.js";
+import { getLogsDir, getServicesDir, getWorkspaceRoot } from "../workspace/paths.js";
 import { defaultShellAllowedRoots, normalizeFileAccessMode } from "../tools/path-access.js";
 
 export type AgentRuntime = {
@@ -76,6 +76,8 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
     "These facts describe the **actual** GenieCEO runtime for this conversation. Treat them as ground truth.",
     "",
     `- workspaceRoot: ${runtime.workspaceRoot}`,
+    `- servicesDir: ${getServicesDir(runtime.workspaceRoot)}`,
+    `- logsDir: ${getLogsDir(runtime.workspaceRoot)}`,
     `- invocationCwd (project scope base): ${runtime.invocationCwd}`,
     `- execution.fileAccessMode: ${fileAccessMode}`,
     `- execution.shell.enabled: ${shellEnabled ? "true" : "false"}`,
@@ -83,6 +85,7 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
     `- execution.shell.allowedRoots (configured): ${configuredShellRoots.length ? configuredShellRoots.join(", ") : "[empty]"}`,
     `- run_command allowed roots (effective): ${effectiveShellRoots.join(", ")}`,
     `- max tool-call iterations per turn: ${DEFAULT_MAX_TOOL_ITERATIONS}`,
+    `- gateway reload behavior: no hot reload (plugin/config changes require gateway restart)`,
   ];
 
   return lines.join("\n");

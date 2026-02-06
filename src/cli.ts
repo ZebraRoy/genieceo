@@ -10,6 +10,7 @@ import { runChat } from "./commands/chat.js";
 import { runReset } from "./commands/reset.js";
 import { runMigrate } from "./commands/migrate.js";
 import { runGateway } from "./commands/gateway.js";
+import { runStatus } from "./commands/status.js";
 
 function getCliVersion(): string {
   try {
@@ -79,6 +80,14 @@ program
     await ensureWorkspace();
     console.log(`Workspace: ${getWorkspaceRoot()}`);
     await runGateway();
+  });
+
+program
+  .command("status")
+  .description("Show gateway + managed service status")
+  .option("--json", "Output JSON for programmatic use")
+  .action(async (options: { json?: boolean }) => {
+    await runStatus({ json: Boolean(options.json) });
   });
 
 program.parseAsync(process.argv);

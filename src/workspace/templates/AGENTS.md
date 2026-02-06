@@ -23,6 +23,8 @@ When running as `genieceo gateway`:
 - You are invoked as a long-lived HTTP process; you do **not** have interactive terminal I/O.
 - Each `conversationKey` is processed serially (one inbound message at a time).
 - Conversations are persisted as JSONL sessions under `~/.genieceo/sessions/`.
+- Gateway channel plugins and webhook routes are loaded/registered **only at gateway startup** (no hot reload).
+- If the user changes `~/.genieceo/config.json` or adds/edits a plugin under `~/.genieceo/plugins/`, the gateway must be **restarted** to pick up changes.
 
 ## Runtime limits you must account for
 - Each turn has a hard cap of **20** tool-call iterations.
