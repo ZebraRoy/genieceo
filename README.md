@@ -28,6 +28,9 @@ genieceo --help
   - Loads prompt files from `~/.genieceo/prompts/`
   - Chats with the configured model via `@mariozechner/pi-ai`
   - Executes tool calls (file tools + web tools) and persists the session to JSONL
+- `genieceo gateway`
+  - Runs the long-lived gateway daemon (HTTP webhooks + message channels)
+  - Loads channel plugins (built-in + `~/.genieceo/plugins/*`)
 - `genieceo reset [--all]`
   - Restores prompt templates under `~/.genieceo/prompts/`
   - With `--all`, also resets `~/.genieceo/config.json`
@@ -40,7 +43,8 @@ genieceo --help
 - `prompts/`: prompt files loaded into the system prompt
   - `IDENTITY.md`, `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`
 - `sessions/`: chat sessions saved as JSONL
-- `logs/`: reserved for future use
+- `logs/`: gateway logs (and future logs)
+- `plugins/`: channel plugins loaded by `genieceo gateway`
 
 ### Config example
 
@@ -60,6 +64,17 @@ genieceo --help
     "braveApiKey": "BSA-...",
     "tavilyApiKey": "tvly-..."
   },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "123456:ABC-DEF...",
+      "webhookSecretToken": "a-random-secret"
+    }
+  },
   "execution": {
     "shell": {
       "enabled": true,
@@ -70,6 +85,81 @@ genieceo --help
   }
 }
 ```
+
+### Gateway + Telegram webhook (local daemon + tunnel)
+
+Telegram webhooks require a **public HTTPS** URL. If you run `genieceo gateway` on your local machine, you’ll need a tunnel.
+
+- Start the gateway:
+
+```bash
+genieceo gateway
+```
+
+- Expose it publicly (example: Cloudflare Tunnel):
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:18790
+```
+
+Take the public URL Cloudflare prints (example: `https://xxxx.trycloudflare.com`).
+
+- Configure Telegram webhook (Bot API `setWebhook`):
+
+```bash
+export BOT_TOKEN="123456:ABC-DEF..."
+export PUBLIC_BASE_URL="https://xxxx.trycloudflare.com"
+export SECRET_TOKEN="a-random-secret"
+
+curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+  -H "content-type: application/json" \
+  -d "{\"url\":\"${PUBLIC_BASE_URL}/webhooks/telegram\",\"secret_token\":\"${SECRET_TOKEN}\"}"
+```
+
+The gateway verifies `X-Telegram-Bot-Api-Secret-Token` if you set `channels.telegram.webhookSecretToken`.
+
+### Always-on gateway (launchd/systemd templates)
+
+To run the gateway continuously:
+
+- **macOS**: see `docs/supervisor/macos-launchagent.plist`
+- **Linux**: see `docs/supervisor/linux-systemd-user.service`
+
+Both templates run `genieceo gateway`, restart on crash, and append logs to `~/.genieceo/logs/`.
+
+Quickstart (macOS):
+
+1. Copy `docs/supervisor/macos-launchagent.plist` to `~/Library/LaunchAgents/io.genieceo.gateway.plist`
+2. Edit the file to set the correct `genieceo` path (`which genieceo`) and your home directory
+3. Load it:
+
+```bash
+launchctl load -w ~/Library/LaunchAgents/io.genieceo.gateway.plist
+launchctl list | grep genieceo
+```
+
+Quickstart (Linux):
+
+1. Copy `docs/supervisor/linux-systemd-user.service` to `~/.config/systemd/user/genieceo-gateway.service`
+2. Edit the `ExecStart` path if needed (`which genieceo`)
+3. Enable + start:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now genieceo-gateway.service
+systemctl --user status genieceo-gateway.service
+```
+
+### Channel plugins (skills-like “just files”)
+
+Channel plugins are folders under `~/.genieceo/plugins/<name>/`.
+
+Each plugin provides:
+
+- `plugin.json` (manifest)
+- `index.js` (entry; compiled JS; loaded via dynamic `import()`)
+
+Enable/configure the plugin by adding a block under `channels.<name>` in `~/.genieceo/config.json` (convention: `{ "enabled": true, ... }`).
 
 ### Notes
 

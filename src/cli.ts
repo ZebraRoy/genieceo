@@ -9,6 +9,7 @@ import { runOnboard } from "./commands/onboard.js";
 import { runChat } from "./commands/chat.js";
 import { runReset } from "./commands/reset.js";
 import { runMigrate } from "./commands/migrate.js";
+import { runGateway } from "./commands/gateway.js";
 
 function getCliVersion(): string {
   try {
@@ -69,6 +70,15 @@ program
       overwritePrompts: Boolean(options.overwritePrompts),
       overwriteSkills: Boolean(options.overwriteSkills),
     });
+  });
+
+program
+  .command("gateway")
+  .description("Run the long-lived GenieCEO gateway (webhooks, channels)")
+  .action(async () => {
+    await ensureWorkspace();
+    console.log(`Workspace: ${getWorkspaceRoot()}`);
+    await runGateway();
   });
 
 program.parseAsync(process.argv);

@@ -202,7 +202,7 @@ export async function runOnboard(): Promise<void> {
 
   const config = await loadConfig(workspaceRoot);
 
-  type SetupStep = "skills" | "access" | "websearch" | "llm";
+  type SetupStep = "skills" | "access" | "websearch" | "llm" | "gateway" | "channels";
 
   const existingProfiles = Object.keys(config.llm?.profiles ?? {}).length;
   const configPath = getConfigPath(workspaceRoot);
@@ -220,6 +220,8 @@ export async function runOnboard(): Promise<void> {
         value: "llm",
         checked: existingProfiles === 0, // required on first setup
       },
+      { name: "Gateway (daemon) settings (host/port/plugins dir)", value: "gateway", checked: false },
+      { name: "Channels (Telegram/webhooks/etc.)", value: "channels", checked: false },
     ],
   })) as SetupStep[];
 
@@ -279,6 +281,57 @@ export async function runOnboard(): Promise<void> {
       : ((config.execution?.fileAccessMode as any) === "protected" ? "protected" : "free");
 
   const webSearch = selectedSteps.includes("websearch") ? await pickWebSearchOrder(config.webSearch) : config.webSearch;
+
+  const gateway = selectedSteps.includes("gateway")
+    ? {
+        host: (await input({
+          message: "Gateway bind host (default: 127.0.0.1).",
+          default: config.gateway?.host ?? "127.0.0.1",
+        })).trim() || "127.0.0.1",
+        port: Number(
+          (await input({
+            message: "Gateway port (default: 18790).",
+            default: String(config.gateway?.port ?? 18790),
+            validate: (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n) || !Number.isInteger(n)) return "Must be an integer";
+              if (n < 1 || n > 65535) return "Must be between 1 and 65535";
+              return true;
+            },
+          })).trim()
+        ),
+        pluginsDir: (await input({
+          message: "Plugins directory override (optional). Leave empty for ~/.genieceo/plugins.",
+          default: config.gateway?.pluginsDir ?? "",
+        })).trim() || undefined,
+      }
+    : config.gateway;
+
+  const channels = { ...(config.channels ?? {}) } as any;
+  if (selectedSteps.includes("channels")) {
+    const enabled = (await checkbox<"telegram">({
+      message: "Select channels to enable/configure.",
+      choices: [{ name: "Telegram webhook (Bot API)", value: "telegram", checked: Boolean(channels.telegram?.enabled) }],
+    })) as ("telegram")[];
+
+    if (enabled.includes("telegram")) {
+      const botToken = (await password({ message: "Telegram bot token (required).", mask: "*" })).trim();
+      const webhookSecretToken = (await password({
+        message: "Telegram webhook secret token (optional but recommended).",
+        mask: "*",
+      })).trim();
+
+      channels.telegram = {
+        ...(channels.telegram ?? {}),
+        enabled: true,
+        botToken: botToken || channels.telegram?.botToken,
+        webhookSecretToken: webhookSecretToken || channels.telegram?.webhookSecretToken,
+      };
+    } else if (channels.telegram?.enabled) {
+      // If user didn't select it, disable it.
+      channels.telegram = { ...(channels.telegram ?? {}), enabled: false };
+    }
+  }
 
   const profiles: Record<string, LlmProfile> = { ...(config.llm?.profiles ?? {}) };
 
@@ -360,6 +413,8 @@ export async function runOnboard(): Promise<void> {
       fileAccessMode: accessMode,
       shellAccessMode: accessMode,
     },
+    gateway,
+    channels,
   };
 
   await saveConfig(updated, workspaceRoot);

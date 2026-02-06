@@ -56,6 +56,30 @@ const WebSearchSchema = z
   })
   .default({ order: ["brave", "tavily", "duckduckgo"] });
 
+const GatewaySchema = z
+  .object({
+    host: z.string().min(1).default("127.0.0.1"),
+    port: z.number().int().min(1).max(65535).default(18790),
+    /**
+     * Optional shared token for non-channel endpoints (future use).
+     */
+    token: z.string().min(1).optional(),
+    /**
+     * Override where the gateway loads plugins from.
+     * Default is ~/.genieceo/plugins.
+     */
+    pluginsDir: z.string().min(1).optional(),
+  })
+  .default({ host: "127.0.0.1", port: 18790 });
+
+/**
+ * Channel configs are intentionally open-ended so new channels/plugins can
+ * extend config.json without requiring a GenieCEO core release.
+ *
+ * Convention: each channel config includes { enabled: boolean, ... }.
+ */
+const ChannelsSchema = z.record(z.string().min(1), z.any()).default({});
+
 const ConfigV1Schema = z.object({
   version: z.literal(1).default(1),
   llm: z
@@ -75,6 +99,8 @@ const ConfigV2Schema = z.object({
   llm: LlmConfigV2Schema,
   webSearch: WebSearchSchema,
   execution: ExecutionSchema,
+  gateway: GatewaySchema,
+  channels: ChannelsSchema,
   telemetry: z.boolean().optional(),
 });
 
@@ -108,6 +134,8 @@ export const ConfigSchema = z.preprocess((val) => {
       activeProfile,
       profiles,
     },
+    gateway: GatewaySchema.parse({}),
+    channels: {},
   };
 }, ConfigV2Schema);
 

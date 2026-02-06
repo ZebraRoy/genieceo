@@ -17,6 +17,8 @@ export class LlmConfigError extends Error {
   name = "LlmConfigError";
 }
 
+export const DEFAULT_MAX_TOOL_ITERATIONS = 20;
+
 export function getActiveLlmProfile(config: GenieCeoConfig): { name: string; profile: LlmProfile } {
   const llm = config.llm;
   const active = llm.activeProfile;
@@ -44,7 +46,7 @@ export async function completeWithToolLoop(opts: {
   registry: ToolRegistry;
   maxIterations?: number;
 }): Promise<AssistantMessage> {
-  const maxIterations = opts.maxIterations ?? 20;
+  const maxIterations = opts.maxIterations ?? DEFAULT_MAX_TOOL_ITERATIONS;
 
   opts.context.tools = opts.tools;
 

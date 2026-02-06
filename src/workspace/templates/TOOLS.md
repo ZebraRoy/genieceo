@@ -22,6 +22,22 @@ Use-case mapping (default behavior):
 - Deliverables the user should pick up in their current folder: **`scope="project"`**
 - Temporary scratch outputs you don’t want to keep: **`scope="tmp"`**
 
+## Access modes: what is actually enforced
+The runtime can restrict filesystem/shell access via `~/.genieceo/config.json`:
+- `execution.fileAccessMode`:
+  - `free` (default): file tools may access any path (including absolute paths outside `~/.genieceo/`)
+  - `protected`: file tools only allow paths within `~/.genieceo/` or the invocation directory; relative paths must stay within the chosen `scope`
+- `execution.shellAccessMode` affects `run_command` allowed roots unless `execution.shell.allowedRoots` is set.
+
+## Shell tool constraints (run_command)
+- Can be disabled via `execution.shell.enabled=false`
+- Working directory must be within allowed roots (derived from access mode unless overridden by `execution.shell.allowedRoots`)
+- Default timeout: 60s (max 600s)
+- Default output limit: 50k chars combined stdout+stderr (max 200k); output is truncated to keep the most recent content
+
+## Tool-loop limits
+- Each turn is limited to **20** tool-call iterations. If you exceed this, the turn fails.
+
 ## Output discipline
 - Keep tool arguments minimal and valid.
 - After a tool result, continue the task using the new information.
