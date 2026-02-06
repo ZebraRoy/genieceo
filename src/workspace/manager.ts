@@ -29,6 +29,7 @@ export class WorkspaceManager {
       const subdirs = [
         'skills',
         'files',
+        'plugins',            // Dynamic plugins
         'docs/tasks',         // Shared context and plans (GenieCEO)
         'memory/staff',       // Staff definitions (GenieCEO)
         'memory/ceo',         // GenieCEO memory store

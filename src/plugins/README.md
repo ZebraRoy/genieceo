@@ -5,7 +5,7 @@ The plugin system allows GenieCEO to dynamically load integrations without resta
 ## Features
 
 - ✅ **Hot reload** - Add/update plugins without restarting
-- ✅ **Type-safe** - Full TypeScript support
+- ✅ **No compilation** - Pure JavaScript, runs immediately
 - ✅ **Isolated** - Plugins run in their own context
 - ✅ **Flexible** - Support for tools, endpoints, and message handlers
 - ✅ **Easy to create** - Simple interface to implement
@@ -26,9 +26,8 @@ User: "Create a Telegram integration plugin for me"
 GenieCEO: [Generates plugin code]
 "I've created a Telegram plugin. To install it:
 1. genieceo plugin install telegram --code '[generated code]'
-2. npm run build
-3. genieceo plugin reload
-4. Configure bot token in ~/.genieceo/config.json"
+2. genieceo plugin reload
+3. Configure bot token in ~/.genieceo/config.json"
 ```
 
 ### 3. Reload Plugins
@@ -43,12 +42,11 @@ genieceo plugin reload telegram
 
 ## Plugin Structure
 
-A plugin is a TypeScript/JavaScript module that implements the `Plugin` interface:
+A plugin is a JavaScript module that implements the `Plugin` interface:
 
-```typescript
-import type { Plugin, PluginContext } from 'genieceo/plugins';
-
-class MyPlugin implements Plugin {
+```javascript
+// Plugins are plain JavaScript (no compilation needed!)
+class MyPlugin {
   metadata = {
     name: 'my-plugin',
     version: '1.0.0',
@@ -56,18 +54,18 @@ class MyPlugin implements Plugin {
     author: 'Your Name',
   };
 
-  async initialize(context: PluginContext): Promise<void> {
+  async initialize(context) {
     // Called when plugin loads
     console.log('Plugin initialized!');
   }
 
-  async cleanup(): Promise<void> {
+  async cleanup() {
     // Called when plugin unloads
     console.log('Plugin cleaning up...');
   }
 }
 
-export default new MyPlugin();
+module.exports = new MyPlugin();
 ```
 
 ## Plugin Types
@@ -76,12 +74,13 @@ export default new MyPlugin();
 
 Handle messages from external platforms:
 
-```typescript
-class TelegramPlugin implements Plugin {
+```javascript
+class TelegramPlugin {
   // ... metadata ...
 
-  async initialize(context: PluginContext): Promise<void> {
+  async initialize(context) {
     const TelegramBot = require('node-telegram-bot-api');
+    const config = context.config?.plugins?.telegram;
     const bot = new TelegramBot(config.token, { polling: true });
     
     bot.on('message', async (msg) => {
@@ -93,14 +92,16 @@ class TelegramPlugin implements Plugin {
     });
   }
 }
+
+module.exports = new TelegramPlugin();
 ```
 
 ### 2. Custom Webhook Endpoint
 
 Add custom endpoints to the webhook server:
 
-```typescript
-class CustomEndpointPlugin implements Plugin {
+```javascript
+class CustomEndpointPlugin {
   // ... metadata ...
 
   getEndpoints() {
@@ -116,14 +117,16 @@ class CustomEndpointPlugin implements Plugin {
     ];
   }
 }
+
+module.exports = new CustomEndpointPlugin();
 ```
 
 ### 3. Custom Tools
 
 Add new tools for the agent:
 
-```typescript
-class MyToolPlugin implements Plugin {
+```javascript
+class MyToolPlugin {
   // ... metadata ...
 
   getTools() {
@@ -145,6 +148,8 @@ class MyToolPlugin implements Plugin {
     ];
   }
 }
+
+module.exports = new MyToolPlugin();
 ```
 
 ## Plugin Directory Structure
@@ -155,15 +160,12 @@ Plugins are stored in `~/.genieceo/workspace/plugins/`:
 plugins/
 ├── telegram/
 │   ├── plugin.json       # Manifest
-│   ├── index.ts          # Source code
-│   └── index.js          # Compiled (after npm run build)
+│   └── index.js          # Plugin code
 ├── discord/
 │   ├── plugin.json
-│   ├── index.ts
 │   └── index.js
 └── custom-endpoint/
     ├── plugin.json
-    ├── index.ts
     └── index.js
 ```
 
@@ -175,7 +177,7 @@ plugins/
   "version": "1.0.0",
   "description": "Telegram bot integration",
   "author": "GenieCEO",
-  "main": "index.ts",
+  "main": "index.js",
   "dependencies": {
     "node-telegram-bot-api": "^0.61.0"
   }
@@ -205,9 +207,9 @@ Configure plugins in `~/.genieceo/config.json`:
 
 See `src/plugins/examples/` for complete examples:
 
-- **telegram.ts** - Telegram bot integration
-- **discord.ts** - Discord bot integration
-- **custom-endpoint.ts** - Custom webhook endpoints
+- **telegram.js** - Telegram bot integration
+- **discord.js** - Discord bot integration
+- **custom-endpoint.js** - Custom webhook endpoints
 
 ## CLI Commands
 
@@ -239,27 +241,19 @@ Ask GenieCEO to create a plugin:
 ```
 
 GenieCEO will:
-1. Generate the plugin code
+1. Generate the plugin code (JavaScript)
 2. Install it via `plugin install`
 3. Provide configuration instructions
 
-### 2. Build
-
-```bash
-npm run build
-```
-
-This compiles TypeScript plugins to JavaScript.
-
-### 3. Reload
+### 2. Reload
 
 ```bash
 genieceo plugin reload
 ```
 
-Plugin is now active without restarting!
+Plugin is now active without restarting! No compilation needed.
 
-### 4. Test
+### 3. Test
 
 The plugin is automatically loaded by:
 - The webhook server (`genieceo serve`)
@@ -267,34 +261,41 @@ The plugin is automatically loaded by:
 
 ## Plugin Interface
 
-```typescript
-export interface Plugin {
-  metadata: PluginMetadata;
+```javascript
+// Plugin structure (all methods are optional except initialize)
+class Plugin {
+  metadata = {
+    name: 'plugin-name',
+    version: '1.0.0',
+    description: 'Description',
+    author: 'Author Name'
+  };
   
   // Required: Called when plugin loads
-  initialize(context: PluginContext): Promise<void>;
+  async initialize(context) { }
   
   // Optional: Called when plugin unloads
-  cleanup?(): Promise<void>;
+  async cleanup() { }
   
   // Optional: Handle messages (for messaging plugins)
-  handleMessage?(message: any): Promise<any>;
+  async handleMessage(message) { }
   
   // Optional: Provide custom tools
-  getTools?(): Tool[];
+  getTools() { return []; }
   
   // Optional: Provide custom endpoints
-  getEndpoints?(): PluginEndpoint[];
+  getEndpoints() { return []; }
 }
 ```
 
 ## Context Available to Plugins
 
-```typescript
-interface PluginContext {
-  config: any;           // Global config
-  workspace: string;     // Workspace path
-  agent: any;            // GenieCEO agent (for executing tasks)
+```javascript
+// Context passed to initialize()
+{
+  config: {},           // Global config from ~/.genieceo/config.json
+  workspace: '',        // Workspace path (~/.genieceo/workspace)
+  agent: {}            // GenieCEO agent (for executing tasks)
 }
 ```
 
@@ -302,8 +303,8 @@ interface PluginContext {
 
 ### 1. Error Handling
 
-```typescript
-async initialize(context: PluginContext) {
+```javascript
+async initialize(context) {
   try {
     // Plugin logic
   } catch (error) {
@@ -331,7 +332,7 @@ Users install them with: `npm install`
 
 Check for config before using:
 
-```typescript
+```javascript
 const config = context.config?.plugins?.myPlugin;
 if (!config) {
   console.log('⚠️  Plugin not configured');
@@ -343,7 +344,7 @@ if (!config) {
 
 Always cleanup resources:
 
-```typescript
+```javascript
 async cleanup() {
   if (this.bot) {
     await this.bot.stop();
@@ -358,7 +359,7 @@ async cleanup() {
 
 Plugins with `getEndpoints()` automatically add routes to the webhook server:
 
-```typescript
+```javascript
 // Plugin defines endpoint
 getEndpoints() {
   return [{
@@ -394,10 +395,10 @@ This allows GenieCEO to integrate with ANY system on-demand without code changes
 
 ### Plugin not loading
 
-1. Check if TypeScript is compiled: `npm run build`
-2. Check for errors: `genieceo plugin list`
-3. Verify plugin.json exists
-4. Check plugin code for syntax errors
+1. Check for errors: `genieceo plugin list`
+2. Verify plugin.json exists
+3. Check plugin code for syntax errors
+4. Verify index.js exists in plugin directory
 
 ### Dependencies missing
 
@@ -417,7 +418,7 @@ genieceo plugin reload
 
 Plugins can communicate via context:
 
-```typescript
+```javascript
 // Plugin A stores data
 context.shared = context.shared || {};
 context.shared.myData = 'value';

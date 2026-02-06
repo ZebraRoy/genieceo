@@ -4,9 +4,7 @@
  * Shows how to add custom endpoints to the webhook server
  */
 
-import type { Plugin, PluginContext, PluginEndpoint } from '../types';
-
-class CustomEndpointPlugin implements Plugin {
+class CustomEndpointPlugin {
   metadata = {
     name: 'custom-endpoint',
     version: '1.0.0',
@@ -14,9 +12,11 @@ class CustomEndpointPlugin implements Plugin {
     author: 'GenieCEO',
   };
 
-  private context!: PluginContext;
+  constructor() {
+    this.context = null;
+  }
 
-  async initialize(context: PluginContext): Promise<void> {
+  async initialize(context) {
     this.context = context;
     console.log('✓ Custom endpoint plugin loaded');
   }
@@ -24,7 +24,7 @@ class CustomEndpointPlugin implements Plugin {
   /**
    * Register custom endpoints
    */
-  getEndpoints(): PluginEndpoint[] {
+  getEndpoints() {
     return [
       {
         method: 'POST',
@@ -62,4 +62,4 @@ class CustomEndpointPlugin implements Plugin {
   }
 }
 
-export default new CustomEndpointPlugin();
+module.exports = new CustomEndpointPlugin();

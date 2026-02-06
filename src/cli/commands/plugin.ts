@@ -109,8 +109,7 @@ async function handleInstall(
   
   console.log(chalk.green(`\n✓ Plugin ${name} installed successfully`));
   console.log(chalk.gray('\nNext steps:'));
-  console.log(chalk.gray('  1. npm run build  (to compile TypeScript)'));
-  console.log(chalk.gray('  2. genieceo plugin reload  (to load the plugin)'));
+  console.log(chalk.gray('  genieceo plugin reload  (to load the plugin)'));
 }
 
 async function handleUninstall(pluginManager: PluginManager, name: string): Promise<void> {

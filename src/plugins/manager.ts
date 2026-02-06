@@ -47,8 +47,8 @@ export class PluginManager {
       // Create plugin directory
       await mkdir(pluginDir, { recursive: true });
       
-      // Write plugin code
-      const mainFile = path.join(pluginDir, 'index.ts');
+      // Write plugin code as JavaScript (no compilation needed)
+      const mainFile = path.join(pluginDir, 'index.js');
       await writeFile(mainFile, code);
       
       // Write manifest
@@ -57,12 +57,12 @@ export class PluginManager {
         name,
         version: '1.0.0',
         description: `Plugin: ${name}`,
-        main: 'index.ts',
+        main: 'index.js',
       };
       await writeFile(manifestPath, JSON.stringify(pluginManifest, null, 2));
       
       console.log(`✓ Plugin ${name} installed at ${pluginDir}`);
-      console.log(`  Note: Run 'npm run build' to compile TypeScript plugins`);
+      console.log(`  Plugin is ready to use - reload to activate it.`);
       
     } catch (error) {
       throw new Error(`Failed to install plugin ${name}: ${error}`);
@@ -81,18 +81,12 @@ export class PluginManager {
       const manifestContent = await readFile(manifestPath, 'utf-8');
       const manifest: PluginManifest = JSON.parse(manifestContent);
       
-      // Determine file to load (prefer compiled .js over .ts)
-      const jsFile = path.join(pluginDir, 'index.js');
-      const tsFile = path.join(pluginDir, 'index.ts');
+      // Determine file to load based on manifest main
+      const mainFile = manifest.main || 'index.js';
+      const pluginPath = path.join(pluginDir, mainFile);
       
-      let pluginPath: string;
-      if (fs.existsSync(jsFile)) {
-        pluginPath = jsFile;
-      } else if (fs.existsSync(tsFile)) {
-        console.warn(`⚠️  Plugin ${name} is TypeScript. Run 'npm run build' to compile it.`);
-        return;
-      } else {
-        throw new Error(`Plugin main file not found: ${manifest.main}`);
+      if (!fs.existsSync(pluginPath)) {
+        throw new Error(`Plugin main file not found: ${mainFile}`);
       }
       
       // Clear require cache for hot reload

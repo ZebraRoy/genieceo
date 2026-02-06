@@ -4,9 +4,7 @@
  * This is an example of how to create a plugin for GenieCEO
  */
 
-import type { Plugin, PluginContext } from '../types';
-
-class TelegramPlugin implements Plugin {
+class TelegramPlugin {
   metadata = {
     name: 'telegram',
     version: '1.0.0',
@@ -15,10 +13,12 @@ class TelegramPlugin implements Plugin {
     dependencies: ['node-telegram-bot-api'],
   };
 
-  private context!: PluginContext;
-  private bot?: any;
+  constructor() {
+    this.context = null;
+    this.bot = null;
+  }
 
-  async initialize(context: PluginContext): Promise<void> {
+  async initialize(context) {
     this.context = context;
     
     // Get Telegram config
@@ -36,7 +36,7 @@ class TelegramPlugin implements Plugin {
       this.bot = new TelegramBot(config.botToken, { polling: true });
       
       // Handle messages
-      this.bot.on('message', async (msg: any) => {
+      this.bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
         const text = msg.text;
         
@@ -63,14 +63,14 @@ class TelegramPlugin implements Plugin {
     }
   }
 
-  async cleanup(): Promise<void> {
+  async cleanup() {
     if (this.bot) {
       await this.bot.stopPolling();
       console.log('✓ Telegram bot stopped');
     }
   }
 
-  async handleMessage(message: any): Promise<any> {
+  async handleMessage(message) {
     // This method is called by the webhook server if configured
     return {
       success: true,
@@ -79,4 +79,4 @@ class TelegramPlugin implements Plugin {
   }
 }
 
-export default new TelegramPlugin();
+module.exports = new TelegramPlugin();

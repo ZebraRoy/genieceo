@@ -38,8 +38,8 @@ User: "Create a Telegram bot integration"
 # You generate the plugin code, then:
 executeCommand('genieceo plugin install telegram --code "generated-code"')
 
-# User builds and reloads (no restart!)
-User runs: npm run build && genieceo plugin reload
+# User reloads (no restart!)
+User runs: genieceo plugin reload
 ```
 
 **Key features:**
@@ -51,17 +51,16 @@ User runs: npm run build && genieceo plugin reload
 
 **Plugin template:**
 
-```typescript
-import type { Plugin, PluginContext } from "genieceo/plugins";
-
-class MyIntegrationPlugin implements Plugin {
+```javascript
+// Plugins are plain JavaScript (no compilation needed!)
+class MyIntegrationPlugin {
   metadata = {
     name: "my-integration",
     version: "1.0.0",
     description: "Integration with XYZ platform",
   };
 
-  async initialize(context: PluginContext) {
+  async initialize(context) {
     // Setup platform connection
     // context.agent.run() to execute tasks
     // context.config for configuration
@@ -72,15 +71,15 @@ class MyIntegrationPlugin implements Plugin {
   }
 }
 
-export default new MyIntegrationPlugin();
+module.exports = new MyIntegrationPlugin();
 ```
 
 **When user asks to integrate with a messaging platform:**
 
-1. Generate plugin code based on platform's SDK
+1. Generate plugin code based on platform's SDK (JavaScript)
 2. Install it: `genieceo plugin install <name> --code "..."`
 3. Provide config instructions
-4. Tell user: `npm run build && genieceo plugin reload`
+4. Tell user: `genieceo plugin reload`
 
 See `PLUGIN_SYSTEM.md` for complete documentation.
 

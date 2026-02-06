@@ -4,9 +4,7 @@
  * Shows how to create a Discord bot plugin
  */
 
-import type { Plugin, PluginContext } from '../types';
-
-class DiscordPlugin implements Plugin {
+class DiscordPlugin {
   metadata = {
     name: 'discord',
     version: '1.0.0',
@@ -15,11 +13,13 @@ class DiscordPlugin implements Plugin {
     dependencies: ['discord.js'],
   };
 
-  private context!: PluginContext;
-  private client?: any;
-  private prefix = '!genieceo';
+  constructor() {
+    this.context = null;
+    this.client = null;
+    this.prefix = '!genieceo';
+  }
 
-  async initialize(context: PluginContext): Promise<void> {
+  async initialize(context) {
     this.context = context;
     
     // Get Discord config
@@ -52,7 +52,7 @@ class DiscordPlugin implements Plugin {
       });
       
       // Handle messages
-      this.client.on('messageCreate', async (message: any) => {
+      this.client.on('messageCreate', async (message) => {
         // Ignore bot messages
         if (message.author.bot) return;
         
@@ -99,7 +99,7 @@ class DiscordPlugin implements Plugin {
     }
   }
 
-  async cleanup(): Promise<void> {
+  async cleanup() {
     if (this.client) {
       await this.client.destroy();
       console.log('✓ Discord bot disconnected');
@@ -107,4 +107,4 @@ class DiscordPlugin implements Plugin {
   }
 }
 
-export default new DiscordPlugin();
+module.exports = new DiscordPlugin();
