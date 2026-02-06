@@ -1,6 +1,8 @@
 ---
 name: integration
 description: Integrate external applications with GenieCEO via HTTP webhooks, REST API, plugins, or programmatic access. Use when setting up integrations with messaging platforms (Line, Slack, Discord), webhooks, CI/CD pipelines, or when the user asks how to trigger GenieCEO from external systems.
+metadata:
+  always: false
 ---
 
 # GenieCEO Integration
@@ -41,20 +43,22 @@ User runs: npm run build && genieceo plugin reload
 ```
 
 **Key features:**
+
 - ✅ Hot reload (no restart)
 - ✅ You can generate plugins on-demand
 - ✅ Platform-specific logic encapsulated
 - ✅ Access to full agent context
 
 **Plugin template:**
+
 ```typescript
-import type { Plugin, PluginContext } from 'genieceo/plugins';
+import type { Plugin, PluginContext } from "genieceo/plugins";
 
 class MyIntegrationPlugin implements Plugin {
   metadata = {
-    name: 'my-integration',
-    version: '1.0.0',
-    description: 'Integration with XYZ platform',
+    name: "my-integration",
+    version: "1.0.0",
+    description: "Integration with XYZ platform",
   };
 
   async initialize(context: PluginContext) {
@@ -72,6 +76,7 @@ export default new MyIntegrationPlugin();
 ```
 
 **When user asks to integrate with a messaging platform:**
+
 1. Generate plugin code based on platform's SDK
 2. Install it: `genieceo plugin install <name> --code "..."`
 3. Provide config instructions
@@ -92,6 +97,7 @@ This starts an HTTP server that exposes endpoints for external systems to intera
 #### Available Endpoints
 
 **POST /webhook** - Execute tasks via webhook
+
 ```bash
 curl -X POST http://localhost:3000/webhook \
   -H "Content-Type: application/json" \
@@ -99,6 +105,7 @@ curl -X POST http://localhost:3000/webhook \
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -108,6 +115,7 @@ Response:
 ```
 
 **POST /chat** - Interactive chat endpoint
+
 ```bash
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
@@ -115,11 +123,13 @@ curl -X POST http://localhost:3000/chat \
 ```
 
 **GET /health** - Health check
+
 ```bash
 curl http://localhost:3000/health
 ```
 
 **GET /status** - Get agent status and statistics
+
 ```bash
 curl http://localhost:3000/status
 ```
@@ -147,6 +157,7 @@ curl -X POST http://localhost:3000/webhook \
 **Setup Line webhook:**
 
 1. Start the webhook server:
+
 ```bash
 genieceo serve --port 3000
 ```
@@ -157,6 +168,7 @@ genieceo serve --port 3000
    - Enable webhook
 
 3. Create a Line webhook handler staff:
+
 ```
 defineStaff({
   name: "line-webhook-handler",
@@ -165,16 +177,17 @@ defineStaff({
 ```
 
 4. Forward Line webhooks to GenieCEO:
+
 ```javascript
 // In your Line webhook handler
-const response = await fetch('http://localhost:3000/webhook', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+const response = await fetch("http://localhost:3000/webhook", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     message: lineEvent.message.text,
-    source: 'line',
-    userId: lineEvent.source.userId
-  })
+    source: "line",
+    userId: lineEvent.source.userId,
+  }),
 });
 ```
 
@@ -184,22 +197,22 @@ Similar to Line, but use Slack's Events API:
 
 ```javascript
 // Slack event handler
-app.event('message', async ({ event, client }) => {
-  const response = await fetch('http://localhost:3000/webhook', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+app.event("message", async ({ event, client }) => {
+  const response = await fetch("http://localhost:3000/webhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message: event.text,
-      source: 'slack',
+      source: "slack",
       userId: event.user,
-      channelId: event.channel
-    })
+      channelId: event.channel,
+    }),
   });
-  
+
   const result = await response.json();
   await client.chat.postMessage({
     channel: event.channel,
-    text: result.response
+    text: result.response,
   });
 });
 ```
@@ -208,20 +221,20 @@ app.event('message', async ({ event, client }) => {
 
 ```javascript
 // Discord bot handler
-client.on('messageCreate', async (message) => {
+client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-  
-  const response = await fetch('http://localhost:3000/webhook', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+
+  const response = await fetch("http://localhost:3000/webhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message: message.content,
-      source: 'discord',
+      source: "discord",
       userId: message.author.id,
-      channelId: message.channel.id
-    })
+      channelId: message.channel.id,
+    }),
   });
-  
+
   const result = await response.json();
   await message.reply(result.response);
 });
@@ -268,8 +281,8 @@ trigger_genieceo:
 For tight integration, import GenieCEO directly:
 
 ```javascript
-import { createGenieCEOAgent } from 'genieceo';
-import { getConfigManager } from 'genieceo/config';
+import { createGenieCEOAgent } from "genieceo";
+import { getConfigManager } from "genieceo/config";
 
 // Load config
 const configManager = getConfigManager();
@@ -297,17 +310,17 @@ console.log(response);
 #### Using Node.js Scheduler
 
 ```javascript
-import cron from 'node-cron';
+import cron from "node-cron";
 
 // Run every day at 9 AM
-cron.schedule('0 9 * * *', async () => {
-  await fetch('http://localhost:3000/webhook', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+cron.schedule("0 9 * * *", async () => {
+  await fetch("http://localhost:3000/webhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: 'Generate daily analytics report',
-      source: 'scheduler'
-    })
+      message: "Generate daily analytics report",
+      source: "scheduler",
+    }),
   });
 });
 ```
@@ -317,6 +330,7 @@ cron.schedule('0 9 * * *', async () => {
 ### Security
 
 1. **Always use authentication** in production:
+
 ```bash
 genieceo serve --auth-token "$(openssl rand -hex 32)"
 ```
@@ -330,11 +344,12 @@ genieceo serve --auth-token "$(openssl rand -hex 32)"
 ### Performance
 
 1. **Long-running tasks**: Use async responses
+
 ```javascript
 // Client-side polling pattern
-const taskResponse = await fetch('/webhook', {
-  method: 'POST',
-  body: JSON.stringify({ message: 'complex task', async: true })
+const taskResponse = await fetch("/webhook", {
+  method: "POST",
+  body: JSON.stringify({ message: "complex task", async: true }),
 });
 
 const { taskId } = await taskResponse.json();
@@ -344,7 +359,7 @@ while (true) {
   const status = await fetch(`/task/${taskId}`);
   const result = await status.json();
   if (result.completed) break;
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 1000));
 }
 ```
 
@@ -353,11 +368,13 @@ while (true) {
 ### Monitoring
 
 1. **Check health endpoint**:
+
 ```bash
 curl http://localhost:3000/health
 ```
 
 2. **View service logs**:
+
 ```bash
 # If running as a service
 listServices()
@@ -365,6 +382,7 @@ viewServiceLogs("genieceo-webhook-xxxx")
 ```
 
 3. **Monitor via status endpoint**:
+
 ```bash
 curl http://localhost:3000/status
 ```
@@ -376,10 +394,10 @@ curl http://localhost:3000/status
 Simple synchronous webhook for quick tasks:
 
 ```javascript
-const result = await fetch('http://localhost:3000/webhook', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ message: 'simple task' })
+const result = await fetch("http://localhost:3000/webhook", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "simple task" }),
 });
 ```
 
@@ -389,12 +407,12 @@ For long-running tasks, use async pattern with callbacks:
 
 ```javascript
 // Submit task
-await fetch('http://localhost:3000/webhook', {
-  method: 'POST',
+await fetch("http://localhost:3000/webhook", {
+  method: "POST",
   body: JSON.stringify({
-    message: 'complex analysis task',
-    callbackUrl: 'https://your-app.com/callback'
-  })
+    message: "complex analysis task",
+    callbackUrl: "https://your-app.com/callback",
+  }),
 });
 
 // GenieCEO will POST results to callbackUrl when done
@@ -405,10 +423,10 @@ await fetch('http://localhost:3000/webhook', {
 For real-time updates:
 
 ```javascript
-const response = await fetch('http://localhost:3000/chat', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ message: 'task', stream: true })
+const response = await fetch("http://localhost:3000/chat", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: "task", stream: true }),
 });
 
 const reader = response.body.getReader();
@@ -424,11 +442,13 @@ while (true) {
 ### Server won't start
 
 Check if port is already in use:
+
 ```bash
 lsof -i :3000
 ```
 
 Use a different port:
+
 ```bash
 genieceo serve --port 8080
 ```
@@ -465,22 +485,22 @@ ngrok http 3000
 
 ```javascript
 // Slack app endpoint
-app.command('/genieceo', async ({ command, ack, respond }) => {
+app.command("/genieceo", async ({ command, ack, respond }) => {
   await ack();
-  
-  const response = await fetch('http://localhost:3000/webhook', {
-    method: 'POST',
+
+  const response = await fetch("http://localhost:3000/webhook", {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer your-token'
+      "Content-Type": "application/json",
+      Authorization: "Bearer your-token",
     },
     body: JSON.stringify({
       message: command.text,
-      source: 'slack',
-      userId: command.user_id
-    })
+      source: "slack",
+      userId: command.user_id,
+    }),
   });
-  
+
   const result = await response.json();
   await respond(result.response);
 });
