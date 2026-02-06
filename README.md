@@ -13,13 +13,14 @@ genieceo is a powerful yet minimalist AI agent that helps you with tasks through
 - 🔄 **Provider-Agnostic**: Uses @mariozechner/pi-ai - supports 15+ providers with automatic model discovery
 - 💾 **Workspace**: Persistent workspace for files, skills, and configuration
 - 🧞 **NEW: GenieCEO Mode** - Multi-agent system with context engineering and service management
+- 🔌 **Integration Support** - Webhook server for Line, Slack, Discord, and other external integrations
 
 ## 🆕 GenieCEO Multi-Agent Mode
 
-Start GenieCEO for advanced capabilities:
+Start GenieCEO chat for advanced capabilities:
 
 ```bash
-genieceo
+genieceo chat
 ```
 
 **Key Features:**
@@ -36,6 +37,48 @@ genieceo
 ```
 
 See [GENIECEO_BUILD_SUMMARY.md](GENIECEO_BUILD_SUMMARY.md) and [examples/](examples/) for details.
+
+## 🔌 Integration & Webhooks
+
+GenieCEO runs as a webhook server by default for external integrations:
+
+```bash
+# Start webhook server (default behavior)
+genieceo --port 3000 --auth-token "your-secret-token"
+
+# Or explicitly
+genieceo -p 3000 -t "your-secret-token"
+```
+
+**Available endpoints:**
+- `POST /webhook` - Execute tasks from external systems
+- `POST /chat` - Interactive chat with session management
+- `GET /health` - Health check
+- `GET /status` - Server statistics
+
+**Example integration:**
+```javascript
+// Trigger GenieCEO from Line, Slack, Discord, etc.
+const response = await fetch('http://localhost:3000/webhook', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer your-secret-token'
+  },
+  body: JSON.stringify({
+    message: 'Build a REST API for blog posts',
+    source: 'line',
+    userId: 'user123'
+  })
+});
+```
+
+**Integration examples:**
+- [Line Bot Integration](examples/integrations/line-bot.js)
+- [Slack Bot Integration](examples/integrations/slack-bot.js)
+- [Discord Bot Integration](examples/integrations/discord-bot.js)
+
+See [Integration Examples](examples/integrations/) for complete setup guides.
 
 ## 📦 Installation
 
@@ -117,12 +160,12 @@ Edit `~/.genieceo/config.json` to add your API keys:
 
 **Single message:**
 ```bash
-genieceo -m "What is 2+2?"
+genieceo chat -m "What is 2+2?"
 ```
 
 **Interactive mode:**
 ```bash
-genieceo
+genieceo chat
 ```
 
 ## 🛠️ Available Tools
@@ -324,28 +367,52 @@ The agent will:
 ### File Operations
 
 ```bash
-genieceo -m "Create a hello.txt file with 'Hello, World!'"
+genieceo chat -m "Create a hello.txt file with 'Hello, World!'"
 ```
 
 ### Web Search
 
 ```bash
-genieceo -m "Search for the latest TypeScript features and summarize them"
+genieceo chat -m "Search for the latest TypeScript features and summarize them"
 ```
 
 ### Shell Commands
 
 ```bash
-genieceo -m "List all JavaScript files in the current directory"
+genieceo chat -m "List all JavaScript files in the current directory"
 ```
 
 ### Complex Task with Subagents
 
 ```bash
-genieceo -m "Create a Node.js web server with Express. Spawn subagents to create routes, middleware, and tests in parallel"
+genieceo chat -m "Create a Node.js web server with Express. Spawn subagents to create routes, middleware, and tests in parallel"
 ```
 
 ## 🎨 CLI Commands
+
+### `genieceo`
+Start webhook server for external integrations (default)
+
+**Options:**
+- `-p, --port <number>` - Port to listen on (default: 3000)
+- `-t, --auth-token <token>` - Authentication token for requests (recommended)
+
+**Example:**
+```bash
+genieceo --port 8080 --auth-token "my-secret-token"
+```
+
+### `genieceo chat`
+Interactive chat with GenieCEO agent
+
+**Options:**
+- `-m, --message <text>` - Send single message instead of interactive mode
+
+**Example:**
+```bash
+genieceo chat
+genieceo chat -m "Build a REST API"
+```
 
 ### `genieceo init`
 Initialize workspace and configuration
@@ -360,19 +427,22 @@ This command guides you through:
 - **Health Check**: Test your LLM configuration with a real API call
 - **Web Search Setup**: Configure search providers (Tavily, Brave, or browser-based)
 
-Example:
+**Example:**
 ```bash
 genieceo onboard
 ```
 
-### `genieceo`
-Start the CEO agent in interactive mode
-
-**Options:**
-- `-m, --message <text>` - Send single message instead of interactive mode
-
 ### `genieceo status`
 Show configuration and workspace status
+
+### `genieceo plugin`
+Manage integration plugins
+
+**Example:**
+```bash
+genieceo plugin list
+genieceo plugin reload
+```
 
 ## 🏗️ Architecture
 
