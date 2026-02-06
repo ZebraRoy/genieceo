@@ -2,6 +2,23 @@ import { z } from "zod";
 
 export const WebSearchProviderSchema = z.enum(["brave", "tavily", "duckduckgo"]);
 
+const ExecutionShellSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    /**
+     * Absolute paths that shell commands are allowed to run within.
+     * If empty, the GenieCEO workspace root and the invocation working directory are allowed.
+     */
+    allowedRoots: z.array(z.string().min(1)).default([]),
+  })
+  .default({ enabled: true, allowedRoots: [] });
+
+const ExecutionSchema = z
+  .object({
+    shell: ExecutionShellSchema,
+  })
+  .default({ shell: { enabled: true, allowedRoots: [] } });
+
 const LlmProfileSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
@@ -42,6 +59,7 @@ const ConfigV2Schema = z.object({
   version: z.literal(2).default(2),
   llm: LlmConfigV2Schema,
   webSearch: WebSearchSchema,
+  execution: ExecutionSchema,
   telemetry: z.boolean().optional(),
 });
 

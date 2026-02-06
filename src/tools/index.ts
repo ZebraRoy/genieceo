@@ -2,12 +2,14 @@ import type { GenieCeoConfig } from "../config/schema.js";
 import type { ToolExecutionContext } from "./types.js";
 import { ToolRegistry } from "./registry.js";
 import { registerFileTools } from "./builtin/files.js";
+import { registerShellTools } from "./builtin/shell.js";
 import { registerWebTools } from "./builtin/web.js";
 
 export function createToolRegistry(ctx: ToolExecutionContext): ToolRegistry {
   const reg = new ToolRegistry();
   registerFileTools(reg, ctx);
   registerWebTools(reg, ctx);
+  registerShellTools(reg, ctx);
   return reg;
 }
 

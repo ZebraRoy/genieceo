@@ -59,6 +59,14 @@ genieceo --help
     "order": ["brave", "tavily", "duckduckgo"],
     "braveApiKey": "BSA-...",
     "tavilyApiKey": "tvly-..."
+  },
+  "execution": {
+    "shell": {
+      "enabled": true,
+      "allowedRoots": [
+        "~/.genieceo"
+      ]
+    }
   }
 }
 ```

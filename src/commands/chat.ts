@@ -33,7 +33,7 @@ export async function runChat(): Promise<void> {
 
   const systemPrompt = await loadSystemPrompt(workspaceRoot);
 
-  const toolRegistry = createToolRegistry({ workspaceRoot, config });
+  const toolRegistry = createToolRegistry({ workspaceRoot, invocationCwd: process.cwd(), config });
   const tools = toolRegistry.list() as Tool[];
 
   const context: Context = {
