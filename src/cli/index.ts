@@ -7,6 +7,7 @@ import { onboardCommand } from './commands/onboard';
 import { ceoCommand } from './commands/ceo';
 import { serveCommand } from './commands/serve';
 import { pluginCommand } from './commands/plugin';
+import { syncCommand } from './commands/sync';
 
 const program = new Command();
 
@@ -67,6 +68,17 @@ program
   .option('-c, --code <code>', 'Plugin code (for install)')
   .action(async (action, name, options) => {
     await pluginCommand({ action, name, code: options.code });
+  });
+
+// Sync command
+program
+  .command('sync')
+  .description('Sync workspace with latest built-in skills and templates')
+  .option('-f, --force', 'Force overwrite existing files')
+  .option('--skills', 'Sync built-in skills only')
+  .option('--templates', 'Sync template files only')
+  .action(async (options) => {
+    await syncCommand(options);
   });
 
 // Parse arguments

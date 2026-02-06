@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "src/templates"
+    "src/templates",
+    "src/skills/builtin"
   ],
   "scripts": {
     "build": "tsc",

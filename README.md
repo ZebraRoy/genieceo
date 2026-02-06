@@ -98,6 +98,15 @@ npm run build
 npm link
 ```
 
+### Upgrading
+
+After upgrading genieceo to a new version, sync your workspace to get the latest built-in skills:
+
+```bash
+npm update -g genieceo  # or: git pull && npm run build
+genieceo sync
+```
+
 ## 🚀 Quick Start
 
 ### 1. Initialize
@@ -434,6 +443,31 @@ genieceo onboard
 
 ### `genieceo status`
 Show configuration and workspace status
+
+### `genieceo sync`
+Sync workspace with latest built-in skills and templates
+
+This command updates your workspace with the latest built-in skills and template files from the package. Useful after upgrading genieceo to get new skills.
+
+**Options:**
+- `-f, --force` - Force overwrite existing files
+- `--skills` - Sync built-in skills only
+- `--templates` - Sync template files only
+
+**Example:**
+```bash
+# Sync everything (skills and templates)
+genieceo sync
+
+# Force overwrite existing files
+genieceo sync --force
+
+# Sync only skills
+genieceo sync --skills
+
+# Sync only templates
+genieceo sync --templates
+```
 
 ### `genieceo plugin`
 Manage integration plugins
