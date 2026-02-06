@@ -24,7 +24,12 @@ export function registerWebTools(
       const query = String(args.query ?? "").trim();
       const count = typeof args.count === "number" ? args.count : 5;
       const resp = await webSearch(ctx.config, { query, count });
-      return JSON.stringify(resp, null, 2);
+      const out: any = resp;
+      if (!Array.isArray(resp.results) || resp.results.length === 0) {
+        out.note =
+          "No results were returned. If you haven't configured Brave/Tavily API keys, results depend on the DuckDuckGo fallback and may be empty for some queries. Try a shorter query (fewer words), or configure a provider API key in ~/.genieceo/config.json.";
+      }
+      return JSON.stringify(out, null, 2);
     }
   );
 
