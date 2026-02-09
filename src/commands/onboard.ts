@@ -290,8 +290,8 @@ export async function runOnboard(): Promise<void> {
         })).trim() || "127.0.0.1",
         port: Number(
           (await input({
-            message: "Gateway port (default: 18790).",
-            default: String(config.gateway?.port ?? 18790),
+            message: "Gateway port (default: 3000).",
+            default: String(config.gateway?.port ?? 3000),
             validate: (v) => {
               const n = Number(v);
               if (!Number.isFinite(n) || !Number.isInteger(n)) return "Must be an integer";
@@ -325,12 +325,58 @@ export async function runOnboard(): Promise<void> {
         mask: "*",
       })).trim();
 
+      const publicDomain = (await input({
+        message: "Public domain for webhook (e.g., https://yourdomain.com or https://xxx.trycloudflare.com).",
+        default: (channels.telegram as any)?.publicDomain ?? "",
+        validate: (v) => {
+          const trimmed = v.trim();
+          if (!trimmed) return "Required - Telegram needs a public URL to send webhooks";
+          if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            return "Must start with http:// or https://";
+          }
+          return true;
+        },
+      })).trim();
+
+      const shouldRegisterWebhook = await confirm({
+        message: "Automatically register webhook with Telegram now?",
+        default: true,
+      });
+
       channels.telegram = {
         ...(channels.telegram ?? {}),
         enabled: true,
         botToken: botToken || channels.telegram?.botToken,
         webhookSecretToken: webhookSecretToken || channels.telegram?.webhookSecretToken,
+        publicDomain: publicDomain,
       };
+
+      if (shouldRegisterWebhook && botToken) {
+        try {
+          const webhookUrl = `${publicDomain}/webhooks/telegram`;
+          const payload: any = { url: webhookUrl };
+          if (webhookSecretToken) {
+            payload.secret_token = webhookSecretToken;
+          }
+
+          const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const result = await res.json();
+          if (result.ok) {
+            console.log(`✓ Webhook registered: ${webhookUrl}`);
+          } else {
+            console.log(`✗ Webhook registration failed: ${result.description || "unknown error"}`);
+            console.log("  You can manually register it later using the curl command in README.md");
+          }
+        } catch (e: any) {
+          console.log(`✗ Error registering webhook: ${e.message}`);
+          console.log("  You can manually register it later using the curl command in README.md");
+        }
+      }
     } else if (channels.telegram?.enabled) {
       channels.telegram = { ...(channels.telegram ?? {}), enabled: false };
     }

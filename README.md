@@ -69,14 +69,15 @@ genieceo --help
   },
   "gateway": {
     "host": "127.0.0.1",
-    "port": 18790,
+    "port": 3000,
     "autostartServices": []
   },
   "channels": {
     "telegram": {
       "enabled": true,
       "botToken": "123456:ABC-DEF...",
-      "webhookSecretToken": "a-random-secret"
+      "webhookSecretToken": "a-random-secret",
+      "publicDomain": "https://xxxx.trycloudflare.com"
     },
     "discord": {
       "enabled": true,
@@ -113,7 +114,7 @@ genieceo gateway
 - Expose it publicly (example: Cloudflare Tunnel):
 
 ```bash
-cloudflared tunnel --url http://127.0.0.1:18790
+cloudflared tunnel --url http://127.0.0.1:3000
 ```
 
 Take the public URL Cloudflare prints (example: `https://xxxx.trycloudflare.com`).
@@ -122,8 +123,13 @@ Take the public URL Cloudflare prints (example: `https://xxxx.trycloudflare.com`
 
 1. Create a bot via [@BotFather](https://t.me/botfather) on Telegram
 2. Use `/newbot` command to create a bot and get your bot token
-3. Configure the bot token in `~/.genieceo/config.json` under `channels.telegram.botToken`
-4. Set the webhook URL using the Bot API:
+3. Run `genieceo onboard` and select "Channels" setup step:
+   - Enter your bot token
+   - Enter a webhook secret token (optional but recommended)
+   - Enter your public domain URL (e.g., `https://xxxx.trycloudflare.com`)
+   - The onboard process will automatically register the webhook with Telegram
+
+Alternatively, manually set the webhook URL using the Bot API:
 
 ```bash
 export BOT_TOKEN="123456:ABC-DEF..."

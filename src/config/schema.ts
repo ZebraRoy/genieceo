@@ -59,7 +59,7 @@ const WebSearchSchema = z
 const GatewaySchema = z
   .object({
     host: z.string().min(1).default("127.0.0.1"),
-    port: z.number().int().min(1).max(65535).default(18790),
+    port: z.number().int().min(1).max(65535).default(3000),
     /**
      * Optional shared token for non-channel endpoints (future use).
      */
@@ -75,7 +75,7 @@ const GatewaySchema = z
      */
     autostartServices: z.array(z.string().min(1)).default([]),
   })
-  .default({ host: "127.0.0.1", port: 18790, autostartServices: [] });
+  .default({ host: "127.0.0.1", port: 3000, autostartServices: [] });
 
 /**
  * Channel configs are intentionally open-ended so new channels/plugins can
