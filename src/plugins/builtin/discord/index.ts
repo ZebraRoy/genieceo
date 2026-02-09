@@ -164,7 +164,14 @@ export async function createChannelAdapter(
 
         // Handle Discord gateway events (MESSAGE_CREATE type)
         if (event?.t === "MESSAGE_CREATE") {
-          void emit(event.d).catch(() => {});
+          void emit(event.d).catch((e) => {
+            ctx.logger?.errorWith("discord inbound emit failed", e, {
+              channel: "discord",
+              t: String(event?.t ?? ""),
+              id: typeof event?.d?.id === "string" ? event.d.id : undefined,
+              hasText: Boolean(normalizeDiscordMessage(event.d).text),
+            });
+          });
         }
 
         return {

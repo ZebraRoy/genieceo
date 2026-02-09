@@ -11,6 +11,9 @@ import { plugin as builtinTelegramPlugin } from "../plugins/builtin/telegram/ind
 import { plugin as builtinDiscordPlugin } from "../plugins/builtin/discord/index.js";
 import { plugin as builtinLinePlugin } from "../plugins/builtin/line/index.js";
 import { ensureServiceRunning } from "../services/manager.js";
+import path from "node:path";
+import { createLogger } from "../logging/logger.js";
+import { getLogsDir } from "../workspace/paths.js";
 
 export async function runGateway(): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
@@ -21,6 +24,12 @@ export async function runGateway(): Promise<void> {
   const port = config.gateway.port;
   const autostart = Array.isArray((config.gateway as any)?.autostartServices) ? (config.gateway as any).autostartServices : [];
 
+  const logger = createLogger({
+    workspaceRoot,
+    scope: "gateway",
+    logFile: path.join(getLogsDir(workspaceRoot), "gateway.log"),
+  });
+
   if (autostart.length > 0) {
     console.log(`Autostart services: ${autostart.join(", ")}`);
     for (const name of autostart) {
@@ -29,9 +38,11 @@ export async function runGateway(): Promise<void> {
       try {
         const rec = await ensureServiceRunning({ workspaceRoot, invocationCwd: workspaceRoot, config }, svc);
         console.log(`- ${svc}: running (pid ${rec.pid})`);
+        logger.info("autostart service running", { service: svc, pid: rec.pid });
       } catch (e: any) {
         const msg = e?.message ? String(e.message) : String(e);
         console.log(`- ${svc}: failed to start: ${msg}`);
+        logger.errorWith("autostart service failed", e, { service: svc });
       }
     }
   }
@@ -42,11 +53,14 @@ export async function runGateway(): Promise<void> {
   const msgRouter = await GatewayMessageRouter.create({
     workspaceRoot,
     invocationCwd: workspaceRoot,
+    logger,
     send: async ({ conversationKey, text }) => {
       const channel = String(conversationKey).split(":")[0];
       const adapter = adapters.get(channel);
       if (!adapter) throw new Error(`No adapter registered for channel '${channel}'`);
+      logger.info("outbound send", { channel, conversationKey, textLen: text?.length ?? 0 });
       await adapter.send({ conversationKey, text });
+      logger.info("outbound sent", { channel, conversationKey });
     },
   });
 
@@ -71,16 +85,18 @@ export async function runGateway(): Promise<void> {
       workspaceRoot,
       config,
       emitInbound: async (msg) => await msgRouter.emitInbound(msg),
+      logger: logger.child(`channel.${p.manifest.name}`),
     });
 
     await adapter.registerRoutes(router);
     adapters.set(p.manifest.name, adapter);
   }
 
-  const { address } = await startGatewayServer({ host, port, router });
+  const { address } = await startGatewayServer({ host, port, router, logger: logger.child("http") });
   const actual = address ? `${address.address}:${address.port}` : `${host}:${port}`;
   console.log(`Gateway listening on http://${actual}`);
   console.log("Press Ctrl+C to stop.");
+  logger.info("gateway listening", { url: `http://${actual}` });
 
   // Keep process alive (server is keeping the event loop open).
 }

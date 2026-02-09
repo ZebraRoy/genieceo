@@ -21,6 +21,11 @@ export async function runChat(): Promise<void> {
   await ensureWorkspace(workspaceRoot);
 
   const runtime = await createAgentRuntime({ workspaceRoot, invocationCwd: process.cwd() });
+  const streamEnabledEnv = String(process.env.GENIECEO_STREAM ?? "").trim().toLowerCase();
+  const streamEnabled =
+    streamEnabledEnv === ""
+      ? true
+      : streamEnabledEnv === "1" || streamEnabledEnv === "true" || streamEnabledEnv === "yes" || streamEnabledEnv === "on";
 
   const context: Context = {
     // Note: refresh this before each model call so SKILLS_INDEX can change between turns.
@@ -51,14 +56,48 @@ export async function runChat(): Promise<void> {
 
       const startLen = context.messages.length;
       // runAgentTurn appends user/assistant/toolResult messages into `context.messages`.
+      let sawTextDelta = false;
+      let startedOutput = false;
       const { assistantText } = await runAgentTurn({
         runtime,
         messages: context.messages,
         userText: line,
         conversation: { channel: "cli" },
+        stream: streamEnabled,
+        onEvent: (ev) => {
+          if (ev.type === "model_text_delta") {
+            if (!startedOutput) {
+              startedOutput = true;
+              process.stdout.write("\n");
+            }
+            sawTextDelta = true;
+            process.stdout.write(ev.delta);
+          } else if (ev.type === "model_text_end") {
+            if (sawTextDelta) process.stdout.write("\n\n");
+          } else if (ev.type === "tool_execute_start") {
+            if (!startedOutput) {
+              startedOutput = true;
+              process.stdout.write("\n");
+            }
+            console.log(`[tool] ${ev.toolName} ...`);
+          } else if (ev.type === "tool_execute_end") {
+            console.log(
+              `[tool] ${ev.toolName} done (${ev.durationMs}ms)${ev.isError ? " [error]" : ""}`,
+            );
+          } else if (ev.type === "error") {
+            if (!startedOutput) {
+              startedOutput = true;
+              process.stdout.write("\n");
+            }
+            console.error(`[error] ${ev.message}`);
+          }
+        },
       });
-      if (assistantText) console.log(`\n${assistantText}\n`);
-      else console.log("\n[No text output]\n");
+      // If streaming showed text deltas, avoid duplicating output.
+      if (!sawTextDelta) {
+        if (assistantText) console.log(`\n${assistantText}\n`);
+        else console.log("\n[No text output]\n");
+      }
 
       // Persist all newly appended messages this turn (user, assistant, tool results).
       const newMessages = context.messages.slice(startLen);

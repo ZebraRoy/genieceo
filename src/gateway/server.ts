@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 
 import type { GatewayRequest } from "./router.js";
 import { GatewayRouter } from "./router.js";
+import type { Logger } from "../logging/logger.js";
 
 function normalizeHeaders(h: http.IncomingHttpHeaders): Record<string, string | string[] | undefined> {
   const out: Record<string, string | string[] | undefined> = {};
@@ -28,13 +29,15 @@ export async function startGatewayServer(opts: {
   port: number;
   router: GatewayRouter;
   maxBodyBytes?: number;
+  logger?: Logger;
 }): Promise<{ close: () => Promise<void>; address: AddressInfo | null }> {
   const maxBodyBytes = typeof opts.maxBodyBytes === "number" ? opts.maxBodyBytes : 1_000_000;
 
   const server = http.createServer(async (req, res) => {
+    const t0 = Date.now();
+    const method = String(req.method ?? "GET").toUpperCase();
+    const url = String(req.url ?? "/");
     try {
-      const method = String(req.method ?? "GET").toUpperCase();
-      const url = String(req.url ?? "/");
       const headers = normalizeHeaders(req.headers);
       const bodyRaw = await readBody(req, maxBodyBytes).catch(() => "");
 
@@ -57,8 +60,12 @@ export async function startGatewayServer(opts: {
         res.setHeader("content-type", "text/plain; charset=utf-8");
       }
       res.end(gwRes.body ?? "");
+      const dt = Math.max(0, Date.now() - t0);
+      opts.logger?.debug("http request", { method, url, status: gwRes.status, durationMs: dt });
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : String(e);
+      const dt = Math.max(0, Date.now() - t0);
+      opts.logger?.errorWith("http handler error", e, { method, url, durationMs: dt });
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ error: "internal_error", message: msg }));

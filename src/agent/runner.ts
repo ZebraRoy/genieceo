@@ -2,7 +2,13 @@ import type { AssistantMessage, Context, Message, Model, Tool } from "@mariozech
 
 import type { GenieCeoConfig } from "../config/schema.js";
 import { loadConfig } from "../config/store.js";
-import { completeWithToolLoop, DEFAULT_MAX_TOOL_ITERATIONS, getActiveLlmProfile, getModelForProfile } from "../llm/pi-ai-adapter.js";
+import {
+  completeWithToolLoop,
+  DEFAULT_MAX_TOOL_ITERATIONS,
+  type AgentLoopEvent,
+  getActiveLlmProfile,
+  getModelForProfile,
+} from "../llm/pi-ai-adapter.js";
 import { createToolRegistry } from "../tools/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { loadSystemPrompt } from "../workspace/bootstrap.js";
@@ -30,8 +36,20 @@ export type ConversationContext = {
 };
 
 export function renderAssistantText(msg: any): string {
-  const parts = (msg?.content ?? []).filter((b: any) => b?.type === "text").map((b: any) => String(b.text ?? ""));
-  return parts.join("").trim();
+  const content = msg?.content;
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const b of content) {
+      if (!b) continue;
+      if (b.type === "text" && typeof b.text === "string") parts.push(b.text);
+      else if (typeof (b as any).text === "string") parts.push(String((b as any).text));
+    }
+    return parts.join("").trim();
+  }
+  // Extremely defensive fallback.
+  if (content && typeof content === "object" && typeof (content as any).text === "string") return String((content as any).text).trim();
+  return "";
 }
 
 export async function createAgentRuntime(opts?: {
@@ -120,6 +138,8 @@ export async function runAgentTurn(opts: {
   userText: string;
   nowMs?: number;
   conversation?: ConversationContext;
+  stream?: boolean;
+  onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[] }> {
   const nowMs = typeof opts.nowMs === "number" ? opts.nowMs : Date.now();
 
@@ -150,6 +170,8 @@ export async function runAgentTurn(opts: {
     context,
     tools: opts.runtime.tools,
     registry: opts.runtime.toolRegistry,
+    stream: Boolean(opts.stream),
+    onEvent: opts.onEvent,
   });
 
   const appendedMessages = context.messages.slice(startLen) as any;

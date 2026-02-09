@@ -37,6 +37,14 @@ genieceo --help
   - Restores prompt templates under `~/.genieceo/prompts/`
   - With `--all`, also resets `~/.genieceo/config.json`
 
+### Debugging / Observability
+
+- **CLI streaming output**: `genieceo chat` streams intermediate model output by default.
+  - Disable streaming: `GENIECEO_STREAM=0 genieceo chat`
+- **Gateway logs**: `genieceo gateway` writes JSON logs to `~/.genieceo/logs/gateway.log`.
+  - Increase verbosity: `GENIECEO_DEBUG=1 genieceo gateway` (or `GENIECEO_LOG_LEVEL=debug`)
+- **Tool progress**: gateway logs include `tool start` / `tool end` with durations so you can see what long task it’s doing.
+
 ### Workspace layout
 
 `~/.genieceo/`

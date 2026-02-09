@@ -191,7 +191,14 @@ export async function createChannelAdapter(
         // Handle Line webhook events
         if (webhook?.events && Array.isArray(webhook.events)) {
           for (const event of webhook.events) {
-            void emit(event).catch(() => {});
+            void emit(event).catch((e) => {
+              ctx.logger?.errorWith("line inbound emit failed", e, {
+                channel: "line",
+                type: typeof event?.type === "string" ? event.type : undefined,
+                messageId: typeof event?.message?.id === "string" ? event.message.id : undefined,
+                hasText: Boolean(normalizeLineMessage(event).text),
+              });
+            });
           }
         }
 

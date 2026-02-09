@@ -1,6 +1,7 @@
 import type { Message } from "@mariozechner/pi-ai";
 
 import type { GatewayRouter } from "../gateway/router.js";
+import type { Logger } from "../logging/logger.js";
 
 export type ChannelPluginManifest = {
   name: string; // folder name + stable id (e.g. "telegram", "line")
@@ -53,6 +54,10 @@ export type ChannelPluginContext = {
    * The gateway will inject a function to pass inbound events into the agent.
    */
   emitInbound: (msg: InboundMessage) => Promise<void>;
+  /**
+   * Optional logger. Built-in gateway passes one; external plugins may ignore it.
+   */
+  logger?: Logger;
 };
 
 export type ChannelPluginModule = {

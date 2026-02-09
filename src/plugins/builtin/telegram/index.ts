@@ -152,7 +152,13 @@ export async function createChannelAdapter(
 
         const update = req.bodyJson ?? null;
         // Don’t block the webhook response on agent execution.
-        void emit(update).catch(() => {});
+        void emit(update).catch((e) => {
+          ctx.logger?.errorWith("telegram inbound emit failed", e, {
+            channel: "telegram",
+            update_id: typeof update?.update_id === "number" ? update.update_id : undefined,
+            hasText: Boolean(normalizeTextUpdate(update).text),
+          });
+        });
 
         return {
           status: 200,
