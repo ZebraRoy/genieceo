@@ -1,0 +1,19 @@
+[Unit]
+Description=GenieCEO Gateway (webhooks/channels)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/genieceo gateway
+Restart=always
+RestartSec=2
+WorkingDirectory=%h
+StandardOutput=append:%h/.genieceo/logs/gateway.out.log
+StandardError=append:%h/.genieceo/logs/gateway.err.log
+
+# Optional env vars:
+# Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+

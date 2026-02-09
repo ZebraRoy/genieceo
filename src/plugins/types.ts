@@ -1,63 +1,69 @@
-/**
- * Plugin System Types
- * 
- * Defines the interface for GenieCEO plugins
- */
+import type { Message } from "@mariozechner/pi-ai";
 
-export interface PluginMetadata {
+import type { GatewayRouter } from "../gateway/router.js";
+import type { Logger } from "../logging/logger.js";
+
+export type ChannelPluginManifest = {
+  name: string; // folder name + stable id (e.g. "telegram", "line")
+  type: "channel";
+  entry: string; // relative path from plugin root (e.g. "./index.js")
+  webhookPaths?: string[]; // optional metadata; gateway still trusts what plugin registers
+  configKey: string; // where settings live in config.json (e.g. "channels.telegram")
+  version?: string;
+};
+
+export type InboundMessage = {
+  channel: string;
+  /**
+   * Stable key for queueing / serialization.
+   * Example: "telegram:bot123:chat456"
+   */
+  conversationKey: string;
+  /**
+   * Filesystem path segments under ~/.genieceo/sessions/.
+   * Example: ["telegram", "bot-123", "chat-456"]
+   */
+  conversationPathParts: string[];
+  userId?: string;
+  text: string;
+  raw?: any;
+};
+
+export type OutboundMessage = {
+  conversationKey: string;
+  text: string;
+};
+
+export type ChannelAdapter = {
   name: string;
-  version: string;
-  description: string;
-  author?: string;
-  dependencies?: string[];
-}
+  /**
+   * Register webhook routes (and/or start pollers).
+   * This is called once at gateway startup.
+   */
+  registerRoutes: (router: GatewayRouter) => void | Promise<void>;
+  /**
+   * Send a message back to the channel.
+   */
+  send: (msg: OutboundMessage) => Promise<void>;
+};
 
-export interface PluginContext {
-  config: any;
-  workspace: string;
-  agent: any;
-}
+export type ChannelPluginContext = {
+  workspaceRoot: string;
+  config: any; // full config.json parsed (plugin reads configKey itself)
+  /**
+   * The gateway will inject a function to pass inbound events into the agent.
+   */
+  emitInbound: (msg: InboundMessage) => Promise<void>;
+  /**
+   * Optional logger. Built-in gateway passes one; external plugins may ignore it.
+   */
+  logger?: Logger;
+};
 
-export interface Plugin {
-  metadata: PluginMetadata;
-  
-  /**
-   * Called when plugin is loaded
-   */
-  initialize(context: PluginContext): Promise<void>;
-  
-  /**
-   * Called when plugin is unloaded
-   */
-  cleanup?(): Promise<void>;
-  
-  /**
-   * Handle incoming messages (for integration plugins)
-   */
-  handleMessage?(message: any): Promise<any>;
-  
-  /**
-   * Register custom tools
-   */
-  getTools?(): any[];
-  
-  /**
-   * Register custom endpoints (for webhook plugins)
-   */
-  getEndpoints?(): PluginEndpoint[];
-}
+export type ChannelPluginModule = {
+  manifest: ChannelPluginManifest;
+  createChannelAdapter: (ctx: ChannelPluginContext) => Promise<ChannelAdapter> | ChannelAdapter;
+};
 
-export interface PluginEndpoint {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  path: string;
-  handler: (req: any, res: any) => Promise<void>;
-}
+export type SessionMessage = Message;
 
-export interface PluginManifest {
-  name: string;
-  version: string;
-  description: string;
-  author?: string;
-  main: string;
-  dependencies?: Record<string, string>;
-}
