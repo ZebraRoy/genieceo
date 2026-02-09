@@ -309,10 +309,14 @@ export async function runOnboard(): Promise<void> {
 
   const channels = { ...(config.channels ?? {}) } as any;
   if (selectedSteps.includes("channels")) {
-    const enabled = (await checkbox<"telegram">({
+    const enabled = (await checkbox<"telegram" | "discord" | "line">({
       message: "Select channels to enable/configure.",
-      choices: [{ name: "Telegram webhook (Bot API)", value: "telegram", checked: Boolean(channels.telegram?.enabled) }],
-    })) as ("telegram")[];
+      choices: [
+        { name: "Telegram webhook (Bot API)", value: "telegram", checked: Boolean(channels.telegram?.enabled) },
+        { name: "Discord webhook (Bot API)", value: "discord", checked: Boolean(channels.discord?.enabled) },
+        { name: "Line Messaging API", value: "line", checked: Boolean(channels.line?.enabled) },
+      ],
+    })) as ("telegram" | "discord" | "line")[];
 
     if (enabled.includes("telegram")) {
       const botToken = (await password({ message: "Telegram bot token (required).", mask: "*" })).trim();
@@ -328,8 +332,41 @@ export async function runOnboard(): Promise<void> {
         webhookSecretToken: webhookSecretToken || channels.telegram?.webhookSecretToken,
       };
     } else if (channels.telegram?.enabled) {
-      // If user didn't select it, disable it.
       channels.telegram = { ...(channels.telegram ?? {}), enabled: false };
+    }
+
+    if (enabled.includes("discord")) {
+      const botToken = (await password({ message: "Discord bot token (required).", mask: "*" })).trim();
+      const webhookSecret = (await password({
+        message: "Discord webhook secret (optional but recommended).",
+        mask: "*",
+      })).trim();
+
+      channels.discord = {
+        ...(channels.discord ?? {}),
+        enabled: true,
+        botToken: botToken || channels.discord?.botToken,
+        webhookSecret: webhookSecret || channels.discord?.webhookSecret,
+      };
+    } else if (channels.discord?.enabled) {
+      channels.discord = { ...(channels.discord ?? {}), enabled: false };
+    }
+
+    if (enabled.includes("line")) {
+      const channelAccessToken = (await password({ message: "Line channel access token (required).", mask: "*" })).trim();
+      const channelSecret = (await password({
+        message: "Line channel secret (required).",
+        mask: "*",
+      })).trim();
+
+      channels.line = {
+        ...(channels.line ?? {}),
+        enabled: true,
+        channelAccessToken: channelAccessToken || channels.line?.channelAccessToken,
+        channelSecret: channelSecret || channels.line?.channelSecret,
+      };
+    } else if (channels.line?.enabled) {
+      channels.line = { ...(channels.line ?? {}), enabled: false };
     }
   }
 

@@ -77,6 +77,16 @@ genieceo --help
       "enabled": true,
       "botToken": "123456:ABC-DEF...",
       "webhookSecretToken": "a-random-secret"
+    },
+    "discord": {
+      "enabled": true,
+      "botToken": "YOUR_DISCORD_BOT_TOKEN",
+      "webhookSecret": "optional-webhook-secret"
+    },
+    "line": {
+      "enabled": true,
+      "channelAccessToken": "YOUR_LINE_CHANNEL_ACCESS_TOKEN",
+      "channelSecret": "YOUR_LINE_CHANNEL_SECRET"
     }
   },
   "execution": {
@@ -90,9 +100,9 @@ genieceo --help
 }
 ```
 
-### Gateway + Telegram webhook (local daemon + tunnel)
+### Gateway + Channel webhooks (local daemon + tunnel)
 
-Telegram webhooks require a **public HTTPS** URL. If you run `genieceo gateway` on your local machine, you’ll need a tunnel.
+Channel webhooks (Telegram, Discord, Line) require a **public HTTPS** URL. If you run `genieceo gateway` on your local machine, you’ll need a tunnel.
 
 - Start the gateway:
 
@@ -108,7 +118,12 @@ cloudflared tunnel --url http://127.0.0.1:18790
 
 Take the public URL Cloudflare prints (example: `https://xxxx.trycloudflare.com`).
 
-- Configure Telegram webhook (Bot API `setWebhook`):
+#### Telegram Setup
+
+1. Create a bot via [@BotFather](https://t.me/botfather) on Telegram
+2. Use `/newbot` command to create a bot and get your bot token
+3. Configure the bot token in `~/.genieceo/config.json` under `channels.telegram.botToken`
+4. Set the webhook URL using the Bot API:
 
 ```bash
 export BOT_TOKEN="123456:ABC-DEF..."
@@ -120,7 +135,24 @@ curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
   -d "{\"url\":\"${PUBLIC_BASE_URL}/webhooks/telegram\",\"secret_token\":\"${SECRET_TOKEN}\"}"
 ```
 
-The gateway verifies `X-Telegram-Bot-Api-Secret-Token` if you set `channels.telegram.webhookSecretToken`.
+The gateway verifies `X-Telegram-Bot-Api-Secret-Token` if you set `channels.telegram.webhookSecretToken` (optional but recommended).
+
+#### Discord Setup
+
+1. Create a Discord bot at https://discord.com/developers/applications
+2. Enable "Message Content Intent" in Bot settings
+3. Configure the bot token in `~/.genieceo/config.json` under `channels.discord.botToken`
+4. Set up Discord interactions endpoint in your app settings to `${PUBLIC_BASE_URL}/webhooks/discord`
+5. Invite the bot to your server with proper permissions (Read Messages, Send Messages)
+
+#### Line Setup
+
+1. Create a Line Messaging API channel at https://developers.line.biz/console/
+2. Get the Channel Access Token and Channel Secret
+3. Configure them in `~/.genieceo/config.json` under `channels.line`
+4. Set the webhook URL in Line Console to `${PUBLIC_BASE_URL}/webhooks/line`
+
+The gateway verifies Line webhook signatures automatically using the channel secret.
 
 ### Always-on gateway (launchd/systemd templates)
 

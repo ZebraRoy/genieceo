@@ -8,6 +8,8 @@ import { GatewayMessageRouter } from "../gateway/message-router.js";
 import { loadAllChannelPlugins } from "../plugins/loader.js";
 import type { ChannelAdapter } from "../plugins/types.js";
 import { plugin as builtinTelegramPlugin } from "../plugins/builtin/telegram/index.js";
+import { plugin as builtinDiscordPlugin } from "../plugins/builtin/discord/index.js";
+import { plugin as builtinLinePlugin } from "../plugins/builtin/line/index.js";
 import { ensureServiceRunning } from "../services/manager.js";
 
 export async function runGateway(): Promise<void> {
@@ -57,7 +59,7 @@ export async function runGateway(): Promise<void> {
   const plugins = await loadAllChannelPlugins({
     workspaceRoot,
     pluginsDir: config.gateway.pluginsDir,
-    builtin: [builtinTelegramPlugin],
+    builtin: [builtinTelegramPlugin, builtinDiscordPlugin, builtinLinePlugin],
   });
   for (const p of plugins) {
     // Skip disabled plugins (by convention, configKey points to {enabled: boolean}).
