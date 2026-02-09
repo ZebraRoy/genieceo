@@ -1,4 +1,4 @@
-import { mkdir, readFile, appendFile } from "node:fs/promises";
+import { mkdir, readFile, appendFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import type { Message } from "@mariozechner/pi-ai";
@@ -45,6 +45,15 @@ export class JsonlSessionStore {
     await mkdir(path.dirname(p), { recursive: true });
     const payload = msgs.map((m) => JSON.stringify(m)).join("\n") + "\n";
     await appendFile(p, payload, "utf8");
+  }
+
+  /**
+   * Clears the conversation history by deleting the session JSONL file.
+   * Safe to call even if it doesn't exist.
+   */
+  async clear(conversationPathParts: string[]): Promise<void> {
+    const p = this.getSessionPath(conversationPathParts);
+    await rm(p, { force: true }).catch(() => {});
   }
 }
 

@@ -35,7 +35,7 @@ export async function runChat(): Promise<void> {
 
   console.log(`Session: ${sessionPath}`);
   console.log(`LLM profile: ${runtime.profileName} (${runtime.provider}/${runtime.modelId})`);
-  console.log('Type your message. Type "/exit" to quit.\n');
+  console.log('Type your message. Type "/exit" to quit. Type "/reset" to clear context.\n');
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -43,10 +43,20 @@ export async function runChat(): Promise<void> {
       const line = (await rl.question("> ")).trim();
       if (!line) continue;
       if (line === "/exit" || line === "/quit") break;
+      if (line === "/reset" || line === "/clear") {
+        context.messages.length = 0;
+        console.log("\n[Conversation cleared]\n");
+        continue;
+      }
 
       const startLen = context.messages.length;
       // runAgentTurn appends user/assistant/toolResult messages into `context.messages`.
-      const { assistantText } = await runAgentTurn({ runtime, messages: context.messages, userText: line });
+      const { assistantText } = await runAgentTurn({
+        runtime,
+        messages: context.messages,
+        userText: line,
+        conversation: { channel: "cli" },
+      });
       if (assistantText) console.log(`\n${assistantText}\n`);
       else console.log("\n[No text output]\n");
 

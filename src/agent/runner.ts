@@ -22,6 +22,13 @@ export type AgentRuntime = {
   toolRegistry: ToolRegistry;
 };
 
+export type ConversationContext = {
+  /**
+   * The communication surface (e.g. "telegram", "discord", "line", "cli").
+   */
+  channel?: string;
+};
+
 export function renderAssistantText(msg: any): string {
   const parts = (msg?.content ?? []).filter((b: any) => b?.type === "text").map((b: any) => String(b.text ?? ""));
   return parts.join("").trim();
@@ -91,16 +98,34 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
   return lines.join("\n");
 }
 
+function renderConversationContext(ctx?: ConversationContext): string {
+  if (!ctx) return "";
+  const channel = ctx.channel ? String(ctx.channel) : "";
+  if (!channel) return "";
+
+  const lines = [
+    "## CHANNEL_CONTEXT",
+    "",
+    "These facts describe how the user is talking to you right now.",
+    "",
+    `- channel: ${channel}`,
+  ].filter(Boolean);
+
+  return lines.join("\n");
+}
+
 export async function runAgentTurn(opts: {
   runtime: AgentRuntime;
   messages: Message[];
   userText: string;
   nowMs?: number;
+  conversation?: ConversationContext;
 }): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[] }> {
   const nowMs = typeof opts.nowMs === "number" ? opts.nowMs : Date.now();
 
   const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
-  const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime)}`;
+  const convo = renderConversationContext(opts.conversation);
+  const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime)}${convo ? `\n\n---\n\n${convo}` : ""}`;
 
   const context: Context = {
     systemPrompt,
@@ -114,7 +139,10 @@ export async function runAgentTurn(opts: {
 
   // Refresh system prompt each turn (skills/templates may have changed on disk).
   const refreshedBase = await loadSystemPrompt(opts.runtime.workspaceRoot);
-  context.systemPrompt = `${refreshedBase}\n\n---\n\n${renderRuntimeContext(opts.runtime)}`;
+  const refreshedConvo = renderConversationContext(opts.conversation);
+  context.systemPrompt = `${refreshedBase}\n\n---\n\n${renderRuntimeContext(opts.runtime)}${
+    refreshedConvo ? `\n\n---\n\n${refreshedConvo}` : ""
+  }`;
 
   const assistant = await completeWithToolLoop({
     apiKey: opts.runtime.apiKey,

@@ -304,6 +304,11 @@ export async function runOnboard(): Promise<void> {
           message: "Plugins directory override (optional). Leave empty for ~/.genieceo/plugins.",
           default: config.gateway?.pluginsDir ?? "",
         })).trim() || undefined,
+        // Preserve fields not covered by the prompt.
+        token: config.gateway?.token,
+        autostartServices: Array.isArray((config.gateway as any)?.autostartServices)
+          ? ((config.gateway as any).autostartServices as string[])
+          : [],
       }
     : config.gateway;
 

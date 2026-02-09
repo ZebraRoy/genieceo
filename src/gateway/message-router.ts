@@ -40,13 +40,36 @@ export class GatewayMessageRouter {
     await next;
   }
 
+  private parseControlCommand(text: string): "reset" | null {
+    const t = String(text ?? "").trim();
+    if (!t) return null;
+    const first = t.split(/\s+/)[0]?.toLowerCase() ?? "";
+    // Telegram may send "/reset@BotName"
+    const cmd = first.split("@")[0];
+    if (cmd === "/reset" || cmd === "/clear") return "reset";
+    return null;
+  }
+
   private async processInbound(msg: InboundMessage): Promise<void> {
+    const control = this.parseControlCommand(msg.text);
+    if (control === "reset") {
+      await this.sessionStore.clear(msg.conversationPathParts);
+      await this.send({
+        conversationKey: msg.conversationKey,
+        text: "Conversation cleared. Start a new topic anytime.",
+      });
+      return;
+    }
+
     const messages: Message[] = await this.sessionStore.load(msg.conversationPathParts, { maxLines: 2000 });
 
     const { assistantText, appendedMessages } = await runAgentTurn({
       runtime: this.runtime,
       messages,
       userText: msg.text,
+      conversation: {
+        channel: msg.channel,
+      },
     });
 
     await this.sessionStore.appendMany(msg.conversationPathParts, appendedMessages as any);
