@@ -485,6 +485,32 @@ export async function runOnboard(): Promise<void> {
         })
       ).trim();
 
+      const existingParseMode = String(
+        (channels.telegram as any)?.parse_mode ??
+          (channels.telegram as any)?.parseMode ??
+          "",
+      ).trim();
+      const parseModeChoice = await select<
+        "__none__" | "HTML" | "MarkdownV2" | "Markdown"
+      >({
+        message:
+          "Telegram parse_mode for outgoing messages (optional; affects formatting).",
+        choices: [
+          { name: "None (plain text)", value: "__none__" },
+          { name: "HTML", value: "HTML" },
+          { name: "MarkdownV2", value: "MarkdownV2" },
+          { name: "Markdown (legacy)", value: "Markdown" },
+        ],
+        default:
+          existingParseMode === "HTML" ||
+          existingParseMode === "MarkdownV2" ||
+          existingParseMode === "Markdown"
+            ? (existingParseMode as any)
+            : "__none__",
+      });
+      const parseMode =
+        parseModeChoice === "__none__" ? undefined : parseModeChoice;
+
       const shouldRegisterWebhook = await confirm({
         message: "Automatically register webhook with Telegram now?",
         default: true,
@@ -497,6 +523,10 @@ export async function runOnboard(): Promise<void> {
         webhookSecretToken:
           webhookSecretToken || channels.telegram?.webhookSecretToken,
         publicDomain: publicDomain,
+        // Always overwrite so selecting "None" clears the config key.
+        parse_mode: parseMode,
+        // Prefer snake_case (matches Telegram API); clear any legacy key.
+        parseMode: undefined,
       };
 
       if (shouldRegisterWebhook && botToken) {

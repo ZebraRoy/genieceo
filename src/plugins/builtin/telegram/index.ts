@@ -10,6 +10,16 @@ type TelegramConfig = {
   enabled?: boolean;
   botToken?: string;
   webhookSecretToken?: string;
+  /**
+   * Telegram Bot API parse mode for outgoing messages.
+   * Supported: "HTML", "MarkdownV2", legacy "Markdown".
+   *
+   * Config supports both keys for convenience:
+   * - channels.telegram.parse_mode (preferred; matches Telegram API)
+   * - channels.telegram.parseMode (legacy/camelCase)
+   */
+  parse_mode?: "HTML" | "MarkdownV2" | "Markdown" | (string & {});
+  parseMode?: "HTML" | "MarkdownV2" | "Markdown" | (string & {});
 };
 
 type TelegramGetMeResponse = {
@@ -105,6 +115,20 @@ export async function createChannelAdapter(
   const botId = String(me.result.id);
 
   const secret = String(cfg.webhookSecretToken ?? "").trim();
+  const parseModeRaw = String(
+    (cfg.parse_mode ?? cfg.parseMode ?? "") as any,
+  ).trim();
+  const parseMode = parseModeRaw || undefined;
+  if (
+    parseMode &&
+    parseMode !== "HTML" &&
+    parseMode !== "MarkdownV2" &&
+    parseMode !== "Markdown"
+  ) {
+    throw new Error(
+      `Telegram plugin config error: channels.telegram.parse_mode must be one of HTML | MarkdownV2 | Markdown (got '${parseMode}')`,
+    );
+  }
   const dedupeLastUpdateId = new Map<string, number>(); // conversationKey -> last update_id
 
   async function emit(update: any): Promise<void> {
@@ -155,7 +179,10 @@ export async function createChannelAdapter(
         void emit(update).catch((e) => {
           ctx.logger?.errorWith("telegram inbound emit failed", e, {
             channel: "telegram",
-            update_id: typeof update?.update_id === "number" ? update.update_id : undefined,
+            update_id:
+              typeof update?.update_id === "number"
+                ? update.update_id
+                : undefined,
             hasText: Boolean(normalizeTextUpdate(update).text),
           });
         });
@@ -179,6 +206,7 @@ export async function createChannelAdapter(
         {
           chat_id: chatId,
           text: msg.text,
+          ...(parseMode ? { parse_mode: parseMode } : {}),
         },
       );
       if (!resp.ok)

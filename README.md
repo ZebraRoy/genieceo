@@ -161,6 +161,8 @@ curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
 
 The gateway verifies `X-Telegram-Bot-Api-Secret-Token` if you set `channels.telegram.webhookSecretToken` (optional but recommended).
 
+You can also set `channels.telegram.parse_mode` to control outgoing formatting (`HTML` or `MarkdownV2`; legacy `Markdown` is also supported).
+
 #### Discord Setup
 
 1. Create a Discord bot at https://discord.com/developers/applications

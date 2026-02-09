@@ -195,7 +195,10 @@ export async function createChannelAdapter(
               ctx.logger?.errorWith("line inbound emit failed", e, {
                 channel: "line",
                 type: typeof event?.type === "string" ? event.type : undefined,
-                messageId: typeof event?.message?.id === "string" ? event.message.id : undefined,
+                messageId:
+                  typeof event?.message?.id === "string"
+                    ? event.message.id
+                    : undefined,
                 hasText: Boolean(normalizeLineMessage(event).text),
               });
             });
