@@ -32,6 +32,11 @@ type TelegramSendMessageResponse = {
   description?: string;
 };
 
+type TelegramSendDocumentResponse = {
+  ok: boolean;
+  description?: string;
+};
+
 function getByPath(obj: any, pathStr: string): any {
   const parts = pathStr
     .split(".")
@@ -48,13 +53,14 @@ function getByPath(obj: any, pathStr: string): any {
 async function telegramApi<T>(
   botToken: string,
   method: string,
-  payload?: any,
+  body?: BodyInit,
+  headers?: Record<string, string>,
 ): Promise<T> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: payload ? JSON.stringify(payload) : undefined,
+    headers,
+    body,
   });
   const text = await res.text().catch(() => "");
   if (!res.ok)
@@ -65,6 +71,67 @@ async function telegramApi<T>(
       ),
     );
   return JSON.parse(text) as T;
+}
+
+async function telegramApiJson<T>(
+  botToken: string,
+  method: string,
+  payload?: any,
+): Promise<T> {
+  return telegramApi<T>(
+    botToken,
+    method,
+    payload ? JSON.stringify(payload) : undefined,
+    payload ? { "content-type": "application/json" } : undefined,
+  );
+}
+
+async function telegramApiForm<T>(
+  botToken: string,
+  method: string,
+  form: FormData,
+): Promise<T> {
+  // IMPORTANT: do not set content-type; fetch will add correct boundary.
+  return telegramApi<T>(botToken, method, form);
+}
+
+const TELEGRAM_MAX_MESSAGE_CHARS = 4096;
+const TELEGRAM_CHUNK_CHARS = 4000; // small buffer to reduce boundary surprises
+const TELEGRAM_MAX_CAPTION_CHARS = 1024;
+
+function splitTelegramText(text: string, limit = TELEGRAM_CHUNK_CHARS) {
+  const chunks: string[] = [];
+  let remaining = text ?? "";
+  while (remaining.length > limit) {
+    const head = remaining.slice(0, limit);
+    const cutCandidates = [
+      head.lastIndexOf("\n\n"),
+      head.lastIndexOf("\n"),
+      head.lastIndexOf(" "),
+    ].filter((n) => n >= 0);
+    const bestCut = Math.max(...cutCandidates, -1);
+    const cut = bestCut >= Math.floor(limit * 0.5) ? bestCut : limit;
+    const part = remaining.slice(0, cut).trimEnd();
+    chunks.push(part.length ? part : remaining.slice(0, limit));
+    remaining = remaining.slice(cut).trimStart();
+  }
+  if (remaining.length) chunks.push(remaining);
+  return chunks;
+}
+
+function clampCaption(text: string, max = TELEGRAM_MAX_CAPTION_CHARS) {
+  const t = String(text ?? "");
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function isTelegramMessageTooLongError(err: unknown) {
+  const msg = String((err as any)?.message ?? err ?? "");
+  return (
+    msg.includes("message is too long") ||
+    msg.includes("MESSAGE_TOO_LONG") ||
+    msg.includes("Bad Request: message is too long")
+  );
 }
 
 function header(
@@ -130,6 +197,73 @@ export async function createChannelAdapter(
     );
   }
   const dedupeLastUpdateId = new Map<string, number>(); // conversationKey -> last update_id
+
+  async function sendMessageText(chatId: string, text: string): Promise<void> {
+    // Attempt with parse_mode; if Telegram rejects entity parsing, retry without it.
+    const payloadWithParseMode = {
+      chat_id: chatId,
+      text,
+      ...(parseMode ? { parse_mode: parseMode } : {}),
+    };
+
+    try {
+      const resp = await telegramApiJson<TelegramSendMessageResponse>(
+        botToken,
+        "sendMessage",
+        payloadWithParseMode,
+      );
+      if (!resp.ok)
+        throw new Error(
+          `Telegram sendMessage failed: ${resp.description ?? "unknown error"}`,
+        );
+      return;
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      const maybeParseError =
+        msg.includes("can't parse entities") ||
+        msg.includes("parse entities");
+      if (!parseMode || !maybeParseError) throw e;
+
+      const resp = await telegramApiJson<TelegramSendMessageResponse>(
+        botToken,
+        "sendMessage",
+        { chat_id: chatId, text },
+      );
+      if (!resp.ok)
+        throw new Error(
+          `Telegram sendMessage failed: ${resp.description ?? "unknown error"}`,
+        );
+    }
+  }
+
+  async function sendMessageAsFile(chatId: string, text: string): Promise<void> {
+    const now = new Date();
+    const stamp = now.toISOString().replace(/[:.]/g, "-");
+    const filename = `genieceo-message-${stamp}.txt`;
+
+    const caption = clampCaption(
+      `Message exceeded Telegram’s ${TELEGRAM_MAX_MESSAGE_CHARS}-character limit; sent as file instead.`,
+    );
+
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("caption", caption);
+    form.append(
+      "document",
+      new Blob([text], { type: "text/plain;charset=utf-8" }),
+      filename,
+    );
+
+    const resp = await telegramApiForm<TelegramSendDocumentResponse>(
+      botToken,
+      "sendDocument",
+      form,
+    );
+    if (!resp.ok)
+      throw new Error(
+        `Telegram sendDocument failed: ${resp.description ?? "unknown error"}`,
+      );
+  }
 
   async function emit(update: any): Promise<void> {
     const { chatId, userId, text } = normalizeTextUpdate(update);
@@ -200,19 +334,34 @@ export async function createChannelAdapter(
       const chatId = parts.length >= 3 ? parts.slice(2).join(":") : "";
       if (!chatId) throw new Error("Telegram send: invalid conversationKey");
 
-      const resp = await telegramApi<TelegramSendMessageResponse>(
-        botToken,
-        "sendMessage",
-        {
-          chat_id: chatId,
-          text: msg.text,
-          ...(parseMode ? { parse_mode: parseMode } : {}),
-        },
-      );
-      if (!resp.ok)
-        throw new Error(
-          `Telegram sendMessage failed: ${resp.description ?? "unknown error"}`,
-        );
+      const text = String(msg.text ?? "");
+      if (text.length <= TELEGRAM_MAX_MESSAGE_CHARS) {
+        try {
+          await sendMessageText(chatId, text);
+          return;
+        } catch (e) {
+          // Telegram counts entities/UTF in ways that can surprise; treat length
+          // failures as retryable with chunking/file.
+          if (!isTelegramMessageTooLongError(e)) throw e;
+        }
+      }
+
+      // For very long responses, Telegram will reject sendMessage; use chunking for
+      // moderately long text (better UX), and fall back to a file for huge output
+      // or if parse_mode makes safe chunking ambiguous.
+      const chunks = splitTelegramText(text, TELEGRAM_CHUNK_CHARS);
+      const shouldSendAsFile =
+        Boolean(parseMode) || chunks.length > 8 || text.length > 50_000;
+
+      if (shouldSendAsFile) {
+        await sendMessageAsFile(chatId, text);
+        return;
+      }
+
+      for (const chunk of chunks) {
+        if (!chunk) continue;
+        await sendMessageText(chatId, chunk);
+      }
     },
   };
 
