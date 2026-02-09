@@ -1,4 +1,10 @@
-import type { ChannelAdapter, ChannelPluginContext, ChannelPluginManifest, ChannelPluginModule, InboundMessage } from "../../types.js";
+import type {
+  ChannelAdapter,
+  ChannelPluginContext,
+  ChannelPluginManifest,
+  ChannelPluginModule,
+  InboundMessage,
+} from "../../types.js";
 
 type DiscordConfig = {
   enabled?: boolean;
@@ -16,7 +22,10 @@ type DiscordUser = {
 type DiscordGetUserResponse = DiscordUser;
 
 function getByPath(obj: any, pathStr: string): any {
-  const parts = pathStr.split(".").map((p) => p.trim()).filter(Boolean);
+  const parts = pathStr
+    .split(".")
+    .map((p) => p.trim())
+    .filter(Boolean);
   let cur: any = obj;
   for (const p of parts) {
     if (!cur || typeof cur !== "object") return undefined;
@@ -25,31 +34,51 @@ function getByPath(obj: any, pathStr: string): any {
   return cur;
 }
 
-async function discordApi<T>(botToken: string, method: string, endpoint: string, payload?: any): Promise<T> {
+async function discordApi<T>(
+  botToken: string,
+  method: string,
+  endpoint: string,
+  payload?: any,
+): Promise<T> {
   const url = `https://discord.com/api/v10${endpoint}`;
   const res = await fetch(url, {
     method,
     headers: {
       "content-type": "application/json",
-      "authorization": `Bot ${botToken}`,
+      authorization: `Bot ${botToken}`,
     },
     body: payload ? JSON.stringify(payload) : undefined,
   });
   const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(`Discord API ${endpoint} failed: ${res.status} ${res.statusText}: ${text}`.slice(0, 1000));
+  if (!res.ok)
+    throw new Error(
+      `Discord API ${endpoint} failed: ${res.status} ${res.statusText}: ${text}`.slice(
+        0,
+        1000,
+      ),
+    );
   return JSON.parse(text) as T;
 }
 
-function header(reqHeaders: Record<string, any>, name: string): string | undefined {
+function header(
+  reqHeaders: Record<string, any>,
+  name: string,
+): string | undefined {
   const v = reqHeaders[name.toLowerCase()];
   if (Array.isArray(v)) return v[0];
   if (typeof v === "string") return v;
   return undefined;
 }
 
-function normalizeDiscordMessage(event: any): { channelId?: string; userId?: string; text?: string } {
-  const channelId = event?.channel_id != null ? String(event.channel_id) : undefined;
-  const userId = event?.author?.id != null ? String(event.author.id) : undefined;
+function normalizeDiscordMessage(event: any): {
+  channelId?: string;
+  userId?: string;
+  text?: string;
+} {
+  const channelId =
+    event?.channel_id != null ? String(event.channel_id) : undefined;
+  const userId =
+    event?.author?.id != null ? String(event.author.id) : undefined;
   const text = typeof event?.content === "string" ? event.content : undefined;
   return { channelId, userId, text };
 }
@@ -62,14 +91,23 @@ export const manifest: ChannelPluginManifest = {
   configKey: "channels.discord",
 };
 
-export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<ChannelAdapter> {
-  const cfg = (getByPath(ctx.config, manifest.configKey) ?? {}) as DiscordConfig;
+export async function createChannelAdapter(
+  ctx: ChannelPluginContext,
+): Promise<ChannelAdapter> {
+  const cfg = (getByPath(ctx.config, manifest.configKey) ??
+    {}) as DiscordConfig;
   const botToken = String(cfg.botToken ?? "").trim();
   if (!botToken) {
-    throw new Error("Discord plugin enabled but channels.discord.botToken is missing in ~/.genieceo/config.json");
+    throw new Error(
+      "Discord plugin enabled but channels.discord.botToken is missing in ~/.genieceo/config.json",
+    );
   }
 
-  const me = await discordApi<DiscordGetUserResponse>(botToken, "GET", "/users/@me");
+  const me = await discordApi<DiscordGetUserResponse>(
+    botToken,
+    "GET",
+    "/users/@me",
+  );
   if (!me.id) throw new Error("Discord getUser failed (invalid bot token?)");
   const botId = String(me.id);
 
@@ -94,7 +132,11 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
     const inbound: InboundMessage = {
       channel: "discord",
       conversationKey,
-      conversationPathParts: ["discord", `bot-${botId}`, `channel-${channelId}`],
+      conversationPathParts: [
+        "discord",
+        `bot-${botId}`,
+        `channel-${channelId}`,
+      ],
       userId,
       text,
       raw: event,
@@ -110,18 +152,26 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
         if (secret) {
           const got = header(req.headers as any, "x-discord-webhook-secret");
           if (!got || got !== secret) {
-            return { status: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ ok: false }) };
+            return {
+              status: 401,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ ok: false }),
+            };
           }
         }
 
         const event = req.bodyJson ?? null;
-        
+
         // Handle Discord gateway events (MESSAGE_CREATE type)
         if (event?.t === "MESSAGE_CREATE") {
           void emit(event.d).catch(() => {});
         }
 
-        return { status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify({ ok: true }) };
+        return {
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ok: true }),
+        };
       });
     },
     async send(msg) {

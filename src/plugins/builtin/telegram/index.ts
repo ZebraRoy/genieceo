@@ -1,4 +1,10 @@
-import type { ChannelAdapter, ChannelPluginContext, ChannelPluginManifest, ChannelPluginModule, InboundMessage } from "../../types.js";
+import type {
+  ChannelAdapter,
+  ChannelPluginContext,
+  ChannelPluginManifest,
+  ChannelPluginModule,
+  InboundMessage,
+} from "../../types.js";
 
 type TelegramConfig = {
   enabled?: boolean;
@@ -17,7 +23,10 @@ type TelegramSendMessageResponse = {
 };
 
 function getByPath(obj: any, pathStr: string): any {
-  const parts = pathStr.split(".").map((p) => p.trim()).filter(Boolean);
+  const parts = pathStr
+    .split(".")
+    .map((p) => p.trim())
+    .filter(Boolean);
   let cur: any = obj;
   for (const p of parts) {
     if (!cur || typeof cur !== "object") return undefined;
@@ -26,7 +35,11 @@ function getByPath(obj: any, pathStr: string): any {
   return cur;
 }
 
-async function telegramApi<T>(botToken: string, method: string, payload?: any): Promise<T> {
+async function telegramApi<T>(
+  botToken: string,
+  method: string,
+  payload?: any,
+): Promise<T> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
   const res = await fetch(url, {
     method: "POST",
@@ -34,18 +47,31 @@ async function telegramApi<T>(botToken: string, method: string, payload?: any): 
     body: payload ? JSON.stringify(payload) : undefined,
   });
   const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(`Telegram API ${method} failed: ${res.status} ${res.statusText}: ${text}`.slice(0, 1000));
+  if (!res.ok)
+    throw new Error(
+      `Telegram API ${method} failed: ${res.status} ${res.statusText}: ${text}`.slice(
+        0,
+        1000,
+      ),
+    );
   return JSON.parse(text) as T;
 }
 
-function header(reqHeaders: Record<string, any>, name: string): string | undefined {
+function header(
+  reqHeaders: Record<string, any>,
+  name: string,
+): string | undefined {
   const v = reqHeaders[name.toLowerCase()];
   if (Array.isArray(v)) return v[0];
   if (typeof v === "string") return v;
   return undefined;
 }
 
-function normalizeTextUpdate(update: any): { chatId?: string; userId?: string; text?: string } {
+function normalizeTextUpdate(update: any): {
+  chatId?: string;
+  userId?: string;
+  text?: string;
+} {
   const msg = update?.message ?? update?.edited_message;
   const chatId = msg?.chat?.id != null ? String(msg.chat.id) : undefined;
   const userId = msg?.from?.id != null ? String(msg.from.id) : undefined;
@@ -61,15 +87,21 @@ export const manifest: ChannelPluginManifest = {
   configKey: "channels.telegram",
 };
 
-export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<ChannelAdapter> {
-  const cfg = (getByPath(ctx.config, manifest.configKey) ?? {}) as TelegramConfig;
+export async function createChannelAdapter(
+  ctx: ChannelPluginContext,
+): Promise<ChannelAdapter> {
+  const cfg = (getByPath(ctx.config, manifest.configKey) ??
+    {}) as TelegramConfig;
   const botToken = String(cfg.botToken ?? "").trim();
   if (!botToken) {
-    throw new Error("Telegram plugin enabled but channels.telegram.botToken is missing in ~/.genieceo/config.json");
+    throw new Error(
+      "Telegram plugin enabled but channels.telegram.botToken is missing in ~/.genieceo/config.json",
+    );
   }
 
   const me = await telegramApi<TelegramGetMeResponse>(botToken, "getMe");
-  if (!me.ok || !me.result?.id) throw new Error("Telegram getMe failed (invalid bot token?)");
+  if (!me.ok || !me.result?.id)
+    throw new Error("Telegram getMe failed (invalid bot token?)");
   const botId = String(me.result.id);
 
   const secret = String(cfg.webhookSecretToken ?? "").trim();
@@ -80,7 +112,8 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
     if (!chatId || !text) return;
 
     const conversationKey = `telegram:${botId}:${chatId}`;
-    const updateId = typeof update?.update_id === "number" ? update.update_id : undefined;
+    const updateId =
+      typeof update?.update_id === "number" ? update.update_id : undefined;
     if (typeof updateId === "number") {
       const last = dedupeLastUpdateId.get(conversationKey);
       if (typeof last === "number" && updateId <= last) return;
@@ -104,9 +137,16 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
     registerRoutes(router) {
       router.post("/webhooks/telegram", async (req) => {
         if (secret) {
-          const got = header(req.headers as any, "x-telegram-bot-api-secret-token");
+          const got = header(
+            req.headers as any,
+            "x-telegram-bot-api-secret-token",
+          );
           if (!got || got !== secret) {
-            return { status: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ ok: false }) };
+            return {
+              status: 401,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ ok: false }),
+            };
           }
         }
 
@@ -114,7 +154,11 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
         // Don’t block the webhook response on agent execution.
         void emit(update).catch(() => {});
 
-        return { status: 200, headers: { "content-type": "application/json" }, body: JSON.stringify({ ok: true }) };
+        return {
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ok: true }),
+        };
       });
     },
     async send(msg) {
@@ -123,11 +167,18 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
       const chatId = parts.length >= 3 ? parts.slice(2).join(":") : "";
       if (!chatId) throw new Error("Telegram send: invalid conversationKey");
 
-      const resp = await telegramApi<TelegramSendMessageResponse>(botToken, "sendMessage", {
-        chat_id: chatId,
-        text: msg.text,
-      });
-      if (!resp.ok) throw new Error(`Telegram sendMessage failed: ${resp.description ?? "unknown error"}`);
+      const resp = await telegramApi<TelegramSendMessageResponse>(
+        botToken,
+        "sendMessage",
+        {
+          chat_id: chatId,
+          text: msg.text,
+        },
+      );
+      if (!resp.ok)
+        throw new Error(
+          `Telegram sendMessage failed: ${resp.description ?? "unknown error"}`,
+        );
     },
   };
 
@@ -135,4 +186,3 @@ export async function createChannelAdapter(ctx: ChannelPluginContext): Promise<C
 }
 
 export const plugin: ChannelPluginModule = { manifest, createChannelAdapter };
-

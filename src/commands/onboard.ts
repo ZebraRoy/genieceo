@@ -1,10 +1,18 @@
 import { checkbox, confirm, input, password, select } from "@inquirer/prompts";
-import { complete, getModel, getModels, getProviders } from "@mariozechner/pi-ai";
+import {
+  complete,
+  getModel,
+  getModels,
+  getProviders,
+} from "@mariozechner/pi-ai";
 import { stat } from "node:fs/promises";
 
 import { loadConfig, saveConfig } from "../config/store.js";
 import type { GenieCeoConfig, LlmProfile } from "../config/schema.js";
-import { ensureWorkspace, installBuiltinSkills } from "../workspace/bootstrap.js";
+import {
+  ensureWorkspace,
+  installBuiltinSkills,
+} from "../workspace/bootstrap.js";
 import { getConfigPath, getWorkspaceRoot } from "../workspace/paths.js";
 
 type WebSearchProvider = "brave" | "tavily" | "duckduckgo";
@@ -20,19 +28,35 @@ function providerLabel(p: WebSearchProvider): string {
   }
 }
 
-async function pickWebSearchOrder(existing: GenieCeoConfig["webSearch"]): Promise<{
+async function pickWebSearchOrder(
+  existing: GenieCeoConfig["webSearch"],
+): Promise<{
   order: WebSearchProvider[];
   braveApiKey?: string;
   tavilyApiKey?: string;
 }> {
   const enabled = (await checkbox<WebSearchProvider>({
-    message: "Select enabled web search providers (space to toggle, enter to confirm).",
+    message:
+      "Select enabled web search providers (space to toggle, enter to confirm).",
     choices: [
-      { name: providerLabel("brave"), value: "brave", checked: existing.order.includes("brave") },
-      { name: providerLabel("tavily"), value: "tavily", checked: existing.order.includes("tavily") },
-      { name: providerLabel("duckduckgo"), value: "duckduckgo", checked: existing.order.includes("duckduckgo") },
+      {
+        name: providerLabel("brave"),
+        value: "brave",
+        checked: existing.order.includes("brave"),
+      },
+      {
+        name: providerLabel("tavily"),
+        value: "tavily",
+        checked: existing.order.includes("tavily"),
+      },
+      {
+        name: providerLabel("duckduckgo"),
+        value: "duckduckgo",
+        checked: existing.order.includes("duckduckgo"),
+      },
     ],
-    validate: (vals) => (vals.length === 0 ? "Select at least one provider." : true),
+    validate: (vals) =>
+      vals.length === 0 ? "Select at least one provider." : true,
   })) as WebSearchProvider[];
 
   // Now choose priority order explicitly (checkbox doesn't express ordering).
@@ -44,7 +68,10 @@ async function pickWebSearchOrder(existing: GenieCeoConfig["webSearch"]): Promis
         order.length === 0
           ? "Pick the FIRST web search provider to try."
           : "Pick the NEXT web search provider to try.",
-      choices: Array.from(remaining).map((p) => ({ name: providerLabel(p), value: p })),
+      choices: Array.from(remaining).map((p) => ({
+        name: providerLabel(p),
+        value: p,
+      })),
     });
     order.push(choice);
     remaining.delete(choice);
@@ -72,32 +99,45 @@ async function pickWebSearchOrder(existing: GenieCeoConfig["webSearch"]): Promis
   return { order, braveApiKey, tavilyApiKey };
 }
 
-async function healthCheckProfile(profile: LlmProfile): Promise<{ ok: boolean; error?: string }> {
+async function healthCheckProfile(
+  profile: LlmProfile,
+): Promise<{ ok: boolean; error?: string }> {
   try {
-    const baseModel = getModel(profile.provider as any, profile.model as any) as any;
-    const model = profile.apiBase ? { ...baseModel, baseUrl: profile.apiBase } : baseModel;
+    const baseModel = getModel(
+      profile.provider as any,
+      profile.model as any,
+    ) as any;
+    const model = profile.apiBase
+      ? { ...baseModel, baseUrl: profile.apiBase }
+      : baseModel;
 
     const msg = await complete(
       model,
       {
         systemPrompt: "You are a health check. Reply with exactly: OK",
-        messages: [{ role: "user", content: "OK", timestamp: Date.now() }] as any,
+        messages: [
+          { role: "user", content: "OK", timestamp: Date.now() },
+        ] as any,
       },
       {
         apiKey: profile.apiKey,
         temperature: 0,
         maxTokens: 16,
-      }
+      },
     );
 
-    if (msg.stopReason === "error") return { ok: false, error: msg.errorMessage ?? "unknown error" };
+    if (msg.stopReason === "error")
+      return { ok: false, error: msg.errorMessage ?? "unknown error" };
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ? String(e.message) : String(e) };
   }
 }
 
-async function pickModelForProvider(provider: string, defaultModel?: string): Promise<string> {
+async function pickModelForProvider(
+  provider: string,
+  defaultModel?: string,
+): Promise<string> {
   const models = getModels(provider as any);
   const maxChoices = 40;
   const modelChoice = await select<string>({
@@ -112,11 +152,18 @@ async function pickModelForProvider(provider: string, defaultModel?: string): Pr
     default: defaultModel,
   });
   return modelChoice === "__custom__"
-    ? (await input({ message: "Enter model id (exact).", validate: (v) => (v.trim() ? true : "Required") })).trim()
+    ? (
+        await input({
+          message: "Enter model id (exact).",
+          validate: (v) => (v.trim() ? true : "Required"),
+        })
+      ).trim()
     : modelChoice;
 }
 
-async function configureProfile(initial: Partial<LlmProfile> = {}): Promise<LlmProfile | null> {
+async function configureProfile(
+  initial: Partial<LlmProfile> = {},
+): Promise<LlmProfile | null> {
   const providers = getProviders();
   const provider = await select<string>({
     message: "Select an LLM provider to configure.",
@@ -125,16 +172,21 @@ async function configureProfile(initial: Partial<LlmProfile> = {}): Promise<LlmP
   });
 
   let model = await pickModelForProvider(provider, initial.model);
-  let apiKey = (await password({
-    message: `API key for ${provider} (leave empty to use env vars).`,
-    mask: "*",
-  })).trim();
+  let apiKey = (
+    await password({
+      message: `API key for ${provider} (leave empty to use env vars).`,
+      mask: "*",
+    })
+  ).trim();
   if (!apiKey && initial.apiKey) apiKey = initial.apiKey;
 
-  let apiBase = (await input({
-    message: "Custom API base URL (optional, for OpenAI-compatible endpoints).",
-    default: initial.apiBase ?? "",
-  })).trim();
+  let apiBase = (
+    await input({
+      message:
+        "Custom API base URL (optional, for OpenAI-compatible endpoints).",
+      default: initial.apiBase ?? "",
+    })
+  ).trim();
 
   const profile: LlmProfile = {
     provider,
@@ -167,7 +219,12 @@ async function configureProfile(initial: Partial<LlmProfile> = {}): Promise<LlmP
     if (action === "skip") return null;
     if (action === "keep") return profile;
     if (action === "retry_key") {
-      apiKey = (await password({ message: `API key for ${provider} (leave empty for env vars).`, mask: "*" })).trim();
+      apiKey = (
+        await password({
+          message: `API key for ${provider} (leave empty for env vars).`,
+          mask: "*",
+        })
+      ).trim();
       profile.apiKey = apiKey || undefined;
       continue;
     }
@@ -179,7 +236,10 @@ async function configureProfile(initial: Partial<LlmProfile> = {}): Promise<LlmP
   }
 }
 
-function defaultProfileName(profiles: Record<string, LlmProfile>, profile: LlmProfile): string {
+function defaultProfileName(
+  profiles: Record<string, LlmProfile>,
+  profile: LlmProfile,
+): string {
   const base = `${profile.provider}:${profile.model}`.replace(/\s+/g, "-");
   if (!profiles[base]) return base;
   let i = 2;
@@ -202,7 +262,13 @@ export async function runOnboard(): Promise<void> {
 
   const config = await loadConfig(workspaceRoot);
 
-  type SetupStep = "skills" | "access" | "websearch" | "llm" | "gateway" | "channels";
+  type SetupStep =
+    | "skills"
+    | "access"
+    | "websearch"
+    | "llm"
+    | "gateway"
+    | "channels";
 
   const existingProfiles = Object.keys(config.llm?.profiles ?? {}).length;
   const configPath = getConfigPath(workspaceRoot);
@@ -212,26 +278,49 @@ export async function runOnboard(): Promise<void> {
     message:
       "Select setup steps to run (space to toggle, enter to confirm). Skipped steps keep existing configuration.",
     choices: [
-      { name: "Built-in skills (install/overwrite)", value: "skills", checked: false },
-      { name: "Filesystem access mode (protected vs free)", value: "access", checked: false },
-      { name: "Web search providers + API keys", value: "websearch", checked: false },
+      {
+        name: "Built-in skills (install/overwrite)",
+        value: "skills",
+        checked: false,
+      },
+      {
+        name: "Filesystem access mode (protected vs free)",
+        value: "access",
+        checked: false,
+      },
+      {
+        name: "Web search providers + API keys",
+        value: "websearch",
+        checked: false,
+      },
       {
         name: "LLM profiles (providers/models/keys) + active profile",
         value: "llm",
         checked: existingProfiles === 0, // required on first setup
       },
-      { name: "Gateway (daemon) settings (host/port/plugins dir)", value: "gateway", checked: false },
-      { name: "Channels (Telegram/webhooks/etc.)", value: "channels", checked: false },
+      {
+        name: "Gateway (daemon) settings (host/port/plugins dir)",
+        value: "gateway",
+        checked: false,
+      },
+      {
+        name: "Channels (Telegram/webhooks/etc.)",
+        value: "channels",
+        checked: false,
+      },
     ],
   })) as SetupStep[];
 
   if (hasConfigFile && selectedSteps.length === 0) {
-    console.log("No steps selected. Will save config as-is (normalized) for migration/upgrade.");
+    console.log(
+      "No steps selected. Will save config as-is (normalized) for migration/upgrade.",
+    );
   }
 
   if (selectedSteps.includes("skills")) {
     const builtinSkills = (await checkbox<string>({
-      message: "Select built-in skills to install (space to toggle, enter to confirm).",
+      message:
+        "Select built-in skills to install (space to toggle, enter to confirm).",
       choices: [
         {
           name: "author-skills — guidance for writing great SKILL.md files",
@@ -256,57 +345,87 @@ export async function runOnboard(): Promise<void> {
       default: false,
     });
 
-    const installRes = await installBuiltinSkills(workspaceRoot, builtinSkills, { overwrite: overwriteSkills });
+    const installRes = await installBuiltinSkills(
+      workspaceRoot,
+      builtinSkills,
+      { overwrite: overwriteSkills },
+    );
     if (installRes.installed.length > 0) {
-      console.log(`Installed skills into ~/.genieceo/skills/: ${installRes.installed.join(", ")}`);
+      console.log(
+        `Installed skills into ~/.genieceo/skills/: ${installRes.installed.join(", ")}`,
+      );
     }
     if (installRes.skipped.length > 0) {
       console.log(
         `Skipped ${installRes.skipped.length} skill(s):\n` +
-          installRes.skipped.map((s) => `- ${s.name}: ${s.reason}`).join("\n")
+          installRes.skipped.map((s) => `- ${s.name}: ${s.reason}`).join("\n"),
       );
     }
   }
 
-  const accessMode =
-    selectedSteps.includes("access")
-      ? await select<"protected" | "free">({
-          message: "Filesystem access mode for tools (file tools + run_command).",
-          choices: [
-            { name: "Completely free (default) — allow access to any path", value: "free" },
-            { name: "Protected — only allow ~/.genieceo and the current folder", value: "protected" },
-          ],
-          default: (config.execution?.fileAccessMode as any) === "protected" ? "protected" : "free",
-        })
-      : ((config.execution?.fileAccessMode as any) === "protected" ? "protected" : "free");
+  const accessMode = selectedSteps.includes("access")
+    ? await select<"protected" | "free">({
+        message: "Filesystem access mode for tools (file tools + run_command).",
+        choices: [
+          {
+            name: "Completely free (default) — allow access to any path",
+            value: "free",
+          },
+          {
+            name: "Protected — only allow ~/.genieceo and the current folder",
+            value: "protected",
+          },
+        ],
+        default:
+          (config.execution?.fileAccessMode as any) === "protected"
+            ? "protected"
+            : "free",
+      })
+    : (config.execution?.fileAccessMode as any) === "protected"
+      ? "protected"
+      : "free";
 
-  const webSearch = selectedSteps.includes("websearch") ? await pickWebSearchOrder(config.webSearch) : config.webSearch;
+  const webSearch = selectedSteps.includes("websearch")
+    ? await pickWebSearchOrder(config.webSearch)
+    : config.webSearch;
 
   const gateway = selectedSteps.includes("gateway")
     ? {
-        host: (await input({
-          message: "Gateway bind host (default: 127.0.0.1).",
-          default: config.gateway?.host ?? "127.0.0.1",
-        })).trim() || "127.0.0.1",
+        host:
+          (
+            await input({
+              message: "Gateway bind host (default: 127.0.0.1).",
+              default: config.gateway?.host ?? "127.0.0.1",
+            })
+          ).trim() || "127.0.0.1",
         port: Number(
-          (await input({
-            message: "Gateway port (default: 3000).",
-            default: String(config.gateway?.port ?? 3000),
-            validate: (v) => {
-              const n = Number(v);
-              if (!Number.isFinite(n) || !Number.isInteger(n)) return "Must be an integer";
-              if (n < 1 || n > 65535) return "Must be between 1 and 65535";
-              return true;
-            },
-          })).trim()
+          (
+            await input({
+              message: "Gateway port (default: 3000).",
+              default: String(config.gateway?.port ?? 3000),
+              validate: (v) => {
+                const n = Number(v);
+                if (!Number.isFinite(n) || !Number.isInteger(n))
+                  return "Must be an integer";
+                if (n < 1 || n > 65535) return "Must be between 1 and 65535";
+                return true;
+              },
+            })
+          ).trim(),
         ),
-        pluginsDir: (await input({
-          message: "Plugins directory override (optional). Leave empty for ~/.genieceo/plugins.",
-          default: config.gateway?.pluginsDir ?? "",
-        })).trim() || undefined,
+        pluginsDir:
+          (
+            await input({
+              message:
+                "Plugins directory override (optional). Leave empty for ~/.genieceo/plugins.",
+              default: config.gateway?.pluginsDir ?? "",
+            })
+          ).trim() || undefined,
         // Preserve fields not covered by the prompt.
         token: config.gateway?.token,
-        autostartServices: Array.isArray((config.gateway as any)?.autostartServices)
+        autostartServices: Array.isArray(
+          (config.gateway as any)?.autostartServices,
+        )
           ? ((config.gateway as any).autostartServices as string[])
           : [],
       }
@@ -317,31 +436,54 @@ export async function runOnboard(): Promise<void> {
     const enabled = (await checkbox<"telegram" | "discord" | "line">({
       message: "Select channels to enable/configure.",
       choices: [
-        { name: "Telegram webhook (Bot API)", value: "telegram", checked: Boolean(channels.telegram?.enabled) },
-        { name: "Discord webhook (Bot API)", value: "discord", checked: Boolean(channels.discord?.enabled) },
-        { name: "Line Messaging API", value: "line", checked: Boolean(channels.line?.enabled) },
+        {
+          name: "Telegram webhook (Bot API)",
+          value: "telegram",
+          checked: Boolean(channels.telegram?.enabled),
+        },
+        {
+          name: "Discord webhook (Bot API)",
+          value: "discord",
+          checked: Boolean(channels.discord?.enabled),
+        },
+        {
+          name: "Line Messaging API",
+          value: "line",
+          checked: Boolean(channels.line?.enabled),
+        },
       ],
     })) as ("telegram" | "discord" | "line")[];
 
     if (enabled.includes("telegram")) {
-      const botToken = (await password({ message: "Telegram bot token (required).", mask: "*" })).trim();
-      const webhookSecretToken = (await password({
-        message: "Telegram webhook secret token (optional but recommended).",
-        mask: "*",
-      })).trim();
+      const botToken = (
+        await password({ message: "Telegram bot token (required).", mask: "*" })
+      ).trim();
+      const webhookSecretToken = (
+        await password({
+          message: "Telegram webhook secret token (optional but recommended).",
+          mask: "*",
+        })
+      ).trim();
 
-      const publicDomain = (await input({
-        message: "Public domain for webhook (e.g., https://yourdomain.com or https://xxx.trycloudflare.com).",
-        default: (channels.telegram as any)?.publicDomain ?? "",
-        validate: (v) => {
-          const trimmed = v.trim();
-          if (!trimmed) return "Required - Telegram needs a public URL to send webhooks";
-          if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-            return "Must start with http:// or https://";
-          }
-          return true;
-        },
-      })).trim();
+      const publicDomain = (
+        await input({
+          message:
+            "Public domain for webhook (e.g., https://yourdomain.com or https://xxx.trycloudflare.com).",
+          default: (channels.telegram as any)?.publicDomain ?? "",
+          validate: (v) => {
+            const trimmed = v.trim();
+            if (!trimmed)
+              return "Required - Telegram needs a public URL to send webhooks";
+            if (
+              !trimmed.startsWith("http://") &&
+              !trimmed.startsWith("https://")
+            ) {
+              return "Must start with http:// or https://";
+            }
+            return true;
+          },
+        })
+      ).trim();
 
       const shouldRegisterWebhook = await confirm({
         message: "Automatically register webhook with Telegram now?",
@@ -352,7 +494,8 @@ export async function runOnboard(): Promise<void> {
         ...(channels.telegram ?? {}),
         enabled: true,
         botToken: botToken || channels.telegram?.botToken,
-        webhookSecretToken: webhookSecretToken || channels.telegram?.webhookSecretToken,
+        webhookSecretToken:
+          webhookSecretToken || channels.telegram?.webhookSecretToken,
         publicDomain: publicDomain,
       };
 
@@ -364,22 +507,31 @@ export async function runOnboard(): Promise<void> {
             payload.secret_token = webhookSecretToken;
           }
 
-          const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const res = await fetch(
+            `https://api.telegram.org/bot${botToken}/setWebhook`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+          );
 
           const result = await res.json();
           if (result.ok) {
             console.log(`✓ Webhook registered: ${webhookUrl}`);
           } else {
-            console.log(`✗ Webhook registration failed: ${result.description || "unknown error"}`);
-            console.log("  You can manually register it later using the curl command in README.md");
+            console.log(
+              `✗ Webhook registration failed: ${result.description || "unknown error"}`,
+            );
+            console.log(
+              "  You can manually register it later using the curl command in README.md",
+            );
           }
         } catch (e: any) {
           console.log(`✗ Error registering webhook: ${e.message}`);
-          console.log("  You can manually register it later using the curl command in README.md");
+          console.log(
+            "  You can manually register it later using the curl command in README.md",
+          );
         }
       }
     } else if (channels.telegram?.enabled) {
@@ -387,11 +539,15 @@ export async function runOnboard(): Promise<void> {
     }
 
     if (enabled.includes("discord")) {
-      const botToken = (await password({ message: "Discord bot token (required).", mask: "*" })).trim();
-      const webhookSecret = (await password({
-        message: "Discord webhook secret (optional but recommended).",
-        mask: "*",
-      })).trim();
+      const botToken = (
+        await password({ message: "Discord bot token (required).", mask: "*" })
+      ).trim();
+      const webhookSecret = (
+        await password({
+          message: "Discord webhook secret (optional but recommended).",
+          mask: "*",
+        })
+      ).trim();
 
       channels.discord = {
         ...(channels.discord ?? {}),
@@ -404,16 +560,24 @@ export async function runOnboard(): Promise<void> {
     }
 
     if (enabled.includes("line")) {
-      const channelAccessToken = (await password({ message: "Line channel access token (required).", mask: "*" })).trim();
-      const channelSecret = (await password({
-        message: "Line channel secret (required).",
-        mask: "*",
-      })).trim();
+      const channelAccessToken = (
+        await password({
+          message: "Line channel access token (required).",
+          mask: "*",
+        })
+      ).trim();
+      const channelSecret = (
+        await password({
+          message: "Line channel secret (required).",
+          mask: "*",
+        })
+      ).trim();
 
       channels.line = {
         ...(channels.line ?? {}),
         enabled: true,
-        channelAccessToken: channelAccessToken || channels.line?.channelAccessToken,
+        channelAccessToken:
+          channelAccessToken || channels.line?.channelAccessToken,
         channelSecret: channelSecret || channels.line?.channelSecret,
       };
     } else if (channels.line?.enabled) {
@@ -421,14 +585,19 @@ export async function runOnboard(): Promise<void> {
     }
   }
 
-  const profiles: Record<string, LlmProfile> = { ...(config.llm?.profiles ?? {}) };
+  const profiles: Record<string, LlmProfile> = {
+    ...(config.llm?.profiles ?? {}),
+  };
 
   let activeProfile: string | undefined = config.llm?.activeProfile;
   if (selectedSteps.includes("llm")) {
     const alreadyHasProfiles = Object.keys(profiles).length > 0;
     let addFirst = true;
     if (alreadyHasProfiles) {
-      addFirst = await confirm({ message: "Add a new LLM profile?", default: false });
+      addFirst = await confirm({
+        message: "Add a new LLM profile?",
+        default: false,
+      });
     }
 
     // Configure 0+ profiles (but require at least 1 overall).
@@ -437,53 +606,75 @@ export async function runOnboard(): Promise<void> {
         const profile = await configureProfile();
         if (!profile) {
           if (Object.keys(profiles).length > 0) {
-            const done = await confirm({ message: "No profile added. Finish LLM setup?", default: true });
+            const done = await confirm({
+              message: "No profile added. Finish LLM setup?",
+              default: true,
+            });
             if (done) break;
             continue;
           }
-          const again = await confirm({ message: "No profile added yet. Try again?", default: true });
-          if (!again) throw new Error("At least one LLM profile is required to use `genieceo chat`.");
+          const again = await confirm({
+            message: "No profile added yet. Try again?",
+            default: true,
+          });
+          if (!again)
+            throw new Error(
+              "At least one LLM profile is required to use `genieceo chat`.",
+            );
           continue;
         }
 
         const suggested = defaultProfileName(profiles, profile);
-        const name = (await input({
-          message: "Profile name (used to select active profile).",
-          default: suggested,
-          validate: (v) => {
-            const s = v.trim();
-            if (!s) return "Required";
-            if (profiles[s]) return "Name already exists";
-            return true;
-          },
-        })).trim();
+        const name = (
+          await input({
+            message: "Profile name (used to select active profile).",
+            default: suggested,
+            validate: (v) => {
+              const s = v.trim();
+              if (!s) return "Required";
+              if (profiles[s]) return "Name already exists";
+              return true;
+            },
+          })
+        ).trim();
 
         profiles[name] = profile;
 
-        const addMore = await confirm({ message: "Add another LLM profile?", default: false });
+        const addMore = await confirm({
+          message: "Add another LLM profile?",
+          default: false,
+        });
         if (!addMore) break;
       }
     }
 
     const profileNames = Object.keys(profiles);
     if (profileNames.length === 0) {
-      throw new Error("No LLM profiles configured. Please run onboard again and add at least one profile.");
+      throw new Error(
+        "No LLM profiles configured. Please run onboard again and add at least one profile.",
+      );
     }
 
     activeProfile = await select<string>({
       message: "Select the active LLM profile to use for `genieceo chat`.",
       choices: profileNames.map((n) => ({ name: n, value: n })),
-      default: activeProfile && profileNames.includes(activeProfile) ? activeProfile : profileNames[0],
+      default:
+        activeProfile && profileNames.includes(activeProfile)
+          ? activeProfile
+          : profileNames[0],
     });
   }
 
   if (Object.keys(profiles).length === 0) {
     throw new Error(
-      "No LLM profiles configured. Please run `genieceo onboard` and select the 'LLM profiles' step to add at least one profile."
+      "No LLM profiles configured. Please run `genieceo onboard` and select the 'LLM profiles' step to add at least one profile.",
     );
   }
 
-  if (!activeProfile || !Object.prototype.hasOwnProperty.call(profiles, activeProfile)) {
+  if (
+    !activeProfile ||
+    !Object.prototype.hasOwnProperty.call(profiles, activeProfile)
+  ) {
     // Safety fallback: keep config valid even if activeProfile was removed/invalid.
     activeProfile = Object.keys(profiles)[0];
   }
@@ -508,4 +699,3 @@ export async function runOnboard(): Promise<void> {
   await saveConfig(updated, workspaceRoot);
   console.log("Saved configuration to ~/.genieceo/config.json");
 }
-

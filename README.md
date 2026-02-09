@@ -57,9 +57,21 @@ genieceo --help
   "llm": {
     "activeProfile": "openai",
     "profiles": {
-      "openai:gpt-4o-mini": { "provider": "openai", "model": "gpt-4o-mini", "apiKey": "sk-..." },
-      "openai:gpt-5-mini": { "provider": "openai", "model": "gpt-5-mini", "apiKey": "sk-..." },
-      "anthropic": { "provider": "anthropic", "model": "claude-3-5-haiku-20241022", "apiKey": "sk-ant-..." }
+      "openai:gpt-4o-mini": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "apiKey": "sk-..."
+      },
+      "openai:gpt-5-mini": {
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "apiKey": "sk-..."
+      },
+      "anthropic": {
+        "provider": "anthropic",
+        "model": "claude-3-5-haiku-20241022",
+        "apiKey": "sk-ant-..."
+      }
     }
   },
   "webSearch": {
@@ -93,9 +105,7 @@ genieceo --help
   "execution": {
     "shell": {
       "enabled": true,
-      "allowedRoots": [
-        "~/.genieceo"
-      ]
+      "allowedRoots": ["~/.genieceo"]
     }
   }
 }
@@ -206,4 +216,3 @@ Enable/configure the plugin by adding a block under `channels.<name>` in `~/.gen
 ### Notes
 
 - Provider/model discovery and tool calling are powered by `@mariozechner/pi-ai` (pi-mono). See its docs at [`pi.dev`](https://buildwithpi.ai/).
-
