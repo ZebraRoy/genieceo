@@ -14,8 +14,17 @@ export function expandHome(p: string): string {
 export function isWithinRoot(rootAbs: string, targetAbs: string): boolean {
   const root = path.resolve(expandHome(rootAbs));
   const target = path.resolve(expandHome(targetAbs));
-  if (target === root) return true;
-  return target.startsWith(root + path.sep);
+
+  // Robust containment check across platforms:
+  // - Handles filesystem roots like "/" (where root + path.sep would be "//")
+  // - Handles Windows drive roots like "C:\\"
+  const rel = path.relative(root, target);
+  if (rel === "") return true;
+  if (rel === "..") return false;
+  if (rel.startsWith(".." + path.sep)) return false;
+  // If relative() returns an absolute path, target is on a different root (Windows).
+  if (path.isAbsolute(rel)) return false;
+  return true;
 }
 
 export function normalizeFileAccessMode(v: unknown): FileAccessMode {
