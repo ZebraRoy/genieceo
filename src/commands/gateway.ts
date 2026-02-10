@@ -54,12 +54,17 @@ export async function runGateway(): Promise<void> {
     workspaceRoot,
     invocationCwd: workspaceRoot,
     logger,
-    send: async ({ conversationKey, text }) => {
+    send: async ({ conversationKey, text, attachments }) => {
       const channel = String(conversationKey).split(":")[0];
       const adapter = adapters.get(channel);
       if (!adapter) throw new Error(`No adapter registered for channel '${channel}'`);
-      logger.info("outbound send", { channel, conversationKey, textLen: text?.length ?? 0 });
-      await adapter.send({ conversationKey, text });
+      logger.info("outbound send", {
+        channel,
+        conversationKey,
+        textLen: text?.length ?? 0,
+        attachments: Array.isArray(attachments) ? attachments.length : 0,
+      });
+      await adapter.send({ conversationKey, text: String(text ?? ""), attachments });
       logger.info("outbound sent", { channel, conversationKey });
     },
   });

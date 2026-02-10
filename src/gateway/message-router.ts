@@ -2,11 +2,11 @@ import type { Message } from "@mariozechner/pi-ai";
 
 import { createAgentRuntime, runAgentTurn } from "../agent/runner.js";
 import type { AgentRuntime } from "../agent/runner.js";
-import type { InboundMessage } from "../plugins/types.js";
+import type { InboundMessage, OutboundMessage } from "../plugins/types.js";
 import { JsonlSessionStore } from "./session-store.js";
 import type { Logger } from "../logging/logger.js";
 
-type SendFn = (opts: { conversationKey: string; text: string }) => Promise<void>;
+type SendFn = (opts: OutboundMessage) => Promise<void>;
 
 /**
  * Serializes processing per conversationKey, loads/persists JSONL sessions,
@@ -81,11 +81,12 @@ export class GatewayMessageRouter {
     try {
       const messages: Message[] = await this.sessionStore.load(msg.conversationPathParts, { maxLines: 2000 });
 
-      const { assistantText, appendedMessages } = await runAgentTurn({
+      const { assistantText, appendedMessages, outboundMessages } = await runAgentTurn({
         runtime: this.runtime,
         messages,
         userText: msg.text,
         attachments: msg.attachments,
+        conversationKey: msg.conversationKey,
         conversation: {
           channel: msg.channel,
         },
@@ -139,6 +140,18 @@ export class GatewayMessageRouter {
           channel: msg.channel,
           conversationKey: msg.conversationKey,
         });
+      }
+
+      if (Array.isArray(outboundMessages) && outboundMessages.length > 0) {
+        for (const out of outboundMessages) {
+          if (!out) continue;
+          // Enforce conversation key to avoid cross-chat sends.
+          await this.send({
+            conversationKey: msg.conversationKey,
+            text: String((out as any)?.text ?? ""),
+            attachments: Array.isArray((out as any)?.attachments) ? (out as any).attachments : undefined,
+          });
+        }
       }
     } catch (e) {
       this.logger?.errorWith("failed to process inbound", e, {

@@ -5,8 +5,9 @@ import type {
   ChannelPluginModule,
   InboundAttachment,
   InboundMessage,
+  OutboundAttachment,
 } from "../../types.js";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getMediaDir } from "../../../workspace/paths.js";
@@ -66,6 +67,32 @@ async function discordApi<T>(
       ),
     );
   return JSON.parse(text) as T;
+}
+
+async function discordApiForm<T>(
+  botToken: string,
+  method: string,
+  endpoint: string,
+  form: FormData,
+): Promise<T> {
+  const url = `https://discord.com/api/v10${endpoint}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      authorization: `Bot ${botToken}`,
+      // IMPORTANT: do not set content-type; fetch will add correct boundary.
+    } as any,
+    body: form as any,
+  });
+  const text = await res.text().catch(() => "");
+  if (!res.ok)
+    throw new Error(
+      `Discord API ${endpoint} failed: ${res.status} ${res.statusText}: ${text}`.slice(
+        0,
+        1000,
+      ),
+    );
+  return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
 function header(
@@ -336,8 +363,42 @@ export async function createChannelAdapter(
       const channelId = parts.length >= 3 ? parts.slice(2).join(":") : "";
       if (!channelId) throw new Error("Discord send: invalid conversationKey");
 
+      const text = String(msg.text ?? "");
+      const outboundAtts = Array.isArray((msg as any)?.attachments)
+        ? ((msg as any).attachments as OutboundAttachment[])
+        : [];
+
+      if (outboundAtts.length > 0) {
+        const form = new FormData();
+        form.append(
+          "payload_json",
+          JSON.stringify({
+            content: text,
+          }),
+        );
+
+        for (let i = 0; i < outboundAtts.length; i++) {
+          const a = outboundAtts[i]!;
+          const p = String(a?.path ?? "").trim();
+          if (!p) continue;
+          const buf = await readFile(p);
+          const filename =
+            String(a?.filename ?? "").trim() || path.basename(p) || "file";
+          const mimeType =
+            String(a?.mimeType ?? "").trim() || "application/octet-stream";
+          form.append(
+            `files[${i}]`,
+            new Blob([buf], { type: mimeType }),
+            filename,
+          );
+        }
+
+        await discordApiForm(botToken, "POST", `/channels/${channelId}/messages`, form);
+        return;
+      }
+
       await discordApi(botToken, "POST", `/channels/${channelId}/messages`, {
-        content: msg.text,
+        content: text,
       });
     },
   };

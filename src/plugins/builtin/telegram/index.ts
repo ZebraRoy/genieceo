@@ -5,8 +5,9 @@ import type {
   ChannelPluginModule,
   InboundAttachment,
   InboundMessage,
+  OutboundAttachment,
 } from "../../types.js";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getMediaDir } from "../../../workspace/paths.js";
@@ -414,6 +415,37 @@ export async function createChannelAdapter(
       );
   }
 
+  async function sendLocalDocument(
+    chatId: string,
+    att: OutboundAttachment,
+    caption?: string,
+  ): Promise<void> {
+    const p = String(att?.path ?? "").trim();
+    if (!p) throw new Error("Telegram sendDocument: attachment path missing");
+    const filename =
+      String(att?.filename ?? "").trim() || path.basename(p) || "file";
+    const mimeType =
+      String(att?.mimeType ?? "").trim() || "application/octet-stream";
+
+    const buf = await readFile(p);
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    if (caption && String(caption).trim()) {
+      form.append("caption", clampCaption(String(caption)));
+    }
+    form.append("document", new Blob([buf], { type: mimeType }), filename);
+
+    const resp = await telegramApiForm<TelegramSendDocumentResponse>(
+      botToken,
+      "sendDocument",
+      form,
+    );
+    if (!resp.ok)
+      throw new Error(
+        `Telegram sendDocument failed: ${resp.description ?? "unknown error"}`,
+      );
+  }
+
   async function emit(update: any): Promise<void> {
     const msg = update?.message ?? update?.edited_message;
     if (!msg) return;
@@ -643,6 +675,37 @@ export async function createChannelAdapter(
       if (!chatId) throw new Error("Telegram send: invalid conversationKey");
 
       const text = String(msg.text ?? "");
+      const outboundAtts = Array.isArray((msg as any)?.attachments)
+        ? ((msg as any).attachments as OutboundAttachment[])
+        : [];
+
+      if (outboundAtts.length > 0) {
+        const captionForFirst = text ? clampCaption(text) : "";
+        for (let i = 0; i < outboundAtts.length; i++) {
+          await sendLocalDocument(
+            chatId,
+            outboundAtts[i]!,
+            i === 0 ? captionForFirst : undefined,
+          );
+        }
+
+        // If text is longer than caption limit, also send full text after the file(s).
+        if (text && text.length > TELEGRAM_MAX_CAPTION_CHARS) {
+          // Reuse existing long-text handling.
+          const chunks = splitTelegramText(text, TELEGRAM_CHUNK_CHARS);
+          const shouldSendAsFile =
+            Boolean(parseMode) || chunks.length > 8 || text.length > 50_000;
+          if (shouldSendAsFile) await sendMessageAsFile(chatId, text);
+          else {
+            for (const chunk of chunks) {
+              if (!chunk) continue;
+              await sendMessageText(chatId, chunk);
+            }
+          }
+        }
+        return;
+      }
+
       if (text.length <= TELEGRAM_MAX_MESSAGE_CHARS) {
         try {
           await sendMessageText(chatId, text);

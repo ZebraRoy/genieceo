@@ -61,9 +61,29 @@ export type InboundAttachment = {
   source?: Record<string, any>;
 };
 
+export type OutboundAttachment = {
+  /**
+   * Absolute path to a local file to upload to the channel.
+   */
+  path: string;
+  /**
+   * Best-effort MIME type (if known).
+   */
+  mimeType?: string;
+  /**
+   * Preferred filename to show to the user (if the channel supports it).
+   */
+  filename?: string;
+};
+
 export type OutboundMessage = {
   conversationKey: string;
   text: string;
+  /**
+   * Optional outbound attachments to upload to the user (e.g. files, images, audio).
+   * Channel adapters should best-effort send them; if unsupported, they should error.
+   */
+  attachments?: OutboundAttachment[];
 };
 
 export type ChannelAdapter = {

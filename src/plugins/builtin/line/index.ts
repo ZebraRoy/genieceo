@@ -213,6 +213,15 @@ export async function createChannelAdapter(
       });
     },
     async send(msg) {
+      const outboundAtts = Array.isArray((msg as any)?.attachments)
+        ? ((msg as any).attachments as any[])
+        : [];
+      if (outboundAtts.length > 0) {
+        throw new Error(
+          "Line outbound attachments are not supported yet (Line requires publicly reachable content URLs, not local file paths).",
+        );
+      }
+
       // conversationKey: line:user:<userId> or line:group:<groupId> or line:room:<roomId>
       const parts = String(msg.conversationKey).split(":");
       if (parts.length < 3 || parts[0] !== "line") {

@@ -16,7 +16,8 @@ import type { ToolRegistry } from "../tools/registry.js";
 import { loadSystemPrompt } from "../workspace/bootstrap.js";
 import { getLogsDir, getServicesDir, getWorkspaceRoot } from "../workspace/paths.js";
 import { defaultShellAllowedRoots, normalizeFileAccessMode } from "../tools/path-access.js";
-import type { InboundAttachment } from "../plugins/types.js";
+import type { InboundAttachment, OutboundMessage } from "../plugins/types.js";
+import { runWithToolTurnContext } from "../tools/turn-context.js";
 
 export type AgentRuntime = {
   workspaceRoot: string;
@@ -207,10 +208,14 @@ export async function runAgentTurn(opts: {
   userText: string;
   attachments?: InboundAttachment[];
   nowMs?: number;
+  /**
+   * Stable conversation key (only present when running via gateway/message channels).
+   */
+  conversationKey?: string;
   conversation?: ConversationContext;
   stream?: boolean;
   onEvent?: (event: AgentLoopEvent) => void;
-}): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[] }> {
+}): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[]; outboundMessages: OutboundMessage[] }> {
   const nowMs = typeof opts.nowMs === "number" ? opts.nowMs : Date.now();
 
   const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
@@ -242,14 +247,25 @@ export async function runAgentTurn(opts: {
     refreshedConvo ? `\n\n---\n\n${refreshedConvo}` : ""
   }`;
 
-  const assistant = await completeWithToolLoop({
-    apiKey: opts.runtime.apiKey,
-    model: opts.runtime.model,
-    context,
-    tools: opts.runtime.tools,
-    registry: opts.runtime.toolRegistry,
-    stream: Boolean(opts.stream),
-    onEvent: opts.onEvent,
+  const outboundMessages: OutboundMessage[] = [];
+  const turnCtx: Parameters<typeof runWithToolTurnContext>[0] = {
+    channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined,
+  };
+  if (opts.conversationKey) {
+    turnCtx.conversationKey = String(opts.conversationKey);
+    turnCtx.queueOutbound = (m) => outboundMessages.push(m);
+  }
+
+  const assistant = await runWithToolTurnContext(turnCtx, async () => {
+    return await completeWithToolLoop({
+      apiKey: opts.runtime.apiKey,
+      model: opts.runtime.model,
+      context,
+      tools: opts.runtime.tools,
+      registry: opts.runtime.toolRegistry,
+      stream: Boolean(opts.stream),
+      onEvent: opts.onEvent,
+    });
   });
 
   const appendedMessages = context.messages.slice(startLen) as any;
@@ -257,6 +273,6 @@ export async function runAgentTurn(opts: {
     appendedMessages[0] = userMsgForSession;
   }
   const assistantText = renderAssistantText(assistant);
-  return { assistant, assistantText, appendedMessages };
+  return { assistant, assistantText, appendedMessages, outboundMessages };
 }
 
