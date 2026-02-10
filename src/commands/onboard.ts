@@ -511,6 +511,45 @@ export async function runOnboard(): Promise<void> {
       const parseMode =
         parseModeChoice === "__none__" ? undefined : parseModeChoice;
 
+      const downloadMedia = await confirm({
+        message:
+          "Download inbound Telegram attachments (images/voice/video/files) into ~/.genieceo/media/?",
+        default: (channels.telegram as any)?.downloadMedia !== false,
+      });
+      const mediaDir = (
+        await input({
+          message:
+            "Telegram media directory override (optional). Leave empty for ~/.genieceo/media.",
+          default: String((channels.telegram as any)?.mediaDir ?? ""),
+        })
+      ).trim();
+      const maxDownloadMb = downloadMedia
+        ? (
+            await input({
+              message:
+                "Telegram max attachment download size in MB (per file, default: 20).",
+              default: String(
+                Math.max(
+                  1,
+                  Math.round(
+                    Number((channels.telegram as any)?.maxDownloadBytes ?? 20 * 1024 * 1024) /
+                      (1024 * 1024),
+                  ),
+                ),
+              ),
+              validate: (v) => {
+                const n = Number(v);
+                if (!Number.isFinite(n) || n <= 0) return "Must be a positive number";
+                return true;
+              },
+            })
+          ).trim()
+        : "";
+      const maxDownloadBytes =
+        downloadMedia && maxDownloadMb
+          ? Math.floor(Number(maxDownloadMb) * 1024 * 1024)
+          : undefined;
+
       const shouldRegisterWebhook = await confirm({
         message: "Automatically register webhook with Telegram now?",
         default: true,
@@ -523,6 +562,9 @@ export async function runOnboard(): Promise<void> {
         webhookSecretToken:
           webhookSecretToken || channels.telegram?.webhookSecretToken,
         publicDomain: publicDomain,
+        downloadMedia,
+        mediaDir: mediaDir || undefined,
+        maxDownloadBytes,
         // Always overwrite so selecting "None" clears the config key.
         parse_mode: parseMode,
         // Prefer snake_case (matches Telegram API); clear any legacy key.
@@ -579,11 +621,53 @@ export async function runOnboard(): Promise<void> {
         })
       ).trim();
 
+      const downloadMedia = await confirm({
+        message:
+          "Download inbound Discord attachments (images/voice/video/files) into ~/.genieceo/media/?",
+        default: (channels.discord as any)?.downloadMedia !== false,
+      });
+      const mediaDir = (
+        await input({
+          message:
+            "Discord media directory override (optional). Leave empty for ~/.genieceo/media.",
+          default: String((channels.discord as any)?.mediaDir ?? ""),
+        })
+      ).trim();
+      const maxDownloadMb = downloadMedia
+        ? (
+            await input({
+              message:
+                "Discord max attachment download size in MB (per file, default: 20).",
+              default: String(
+                Math.max(
+                  1,
+                  Math.round(
+                    Number((channels.discord as any)?.maxDownloadBytes ?? 20 * 1024 * 1024) /
+                      (1024 * 1024),
+                  ),
+                ),
+              ),
+              validate: (v) => {
+                const n = Number(v);
+                if (!Number.isFinite(n) || n <= 0) return "Must be a positive number";
+                return true;
+              },
+            })
+          ).trim()
+        : "";
+      const maxDownloadBytes =
+        downloadMedia && maxDownloadMb
+          ? Math.floor(Number(maxDownloadMb) * 1024 * 1024)
+          : undefined;
+
       channels.discord = {
         ...(channels.discord ?? {}),
         enabled: true,
         botToken: botToken || channels.discord?.botToken,
         webhookSecret: webhookSecret || channels.discord?.webhookSecret,
+        downloadMedia,
+        mediaDir: mediaDir || undefined,
+        maxDownloadBytes,
       };
     } else if (channels.discord?.enabled) {
       channels.discord = { ...(channels.discord ?? {}), enabled: false };

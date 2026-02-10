@@ -3,13 +3,21 @@ import type {
   ChannelPluginContext,
   ChannelPluginManifest,
   ChannelPluginModule,
+  InboundAttachment,
   InboundMessage,
 } from "../../types.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { getMediaDir } from "../../../workspace/paths.js";
 
 type DiscordConfig = {
   enabled?: boolean;
   botToken?: string;
   webhookSecret?: string;
+  downloadMedia?: boolean;
+  mediaDir?: string;
+  maxDownloadBytes?: number;
 };
 
 type DiscordUser = {
@@ -83,6 +91,24 @@ function normalizeDiscordMessage(event: any): {
   return { channelId, userId, text };
 }
 
+function sanitizeFilename(name: string): string {
+  const s = String(name ?? "").trim();
+  if (!s) return "file";
+  return s
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\u0000-\u001f\u007f]/g, "_")
+    .replace(/[:*?"<>|]/g, "_")
+    .slice(0, 200);
+}
+
+function resolveMediaDir(workspaceRoot: string, mediaDir?: string): string {
+  const raw = String(mediaDir ?? "").trim();
+  if (!raw) return getMediaDir(workspaceRoot);
+  if (raw.startsWith("~/")) return path.join(os.homedir(), raw.slice(2));
+  if (path.isAbsolute(raw)) return raw;
+  return path.join(workspaceRoot, raw);
+}
+
 export const manifest: ChannelPluginManifest = {
   name: "discord",
   type: "channel",
@@ -112,11 +138,17 @@ export async function createChannelAdapter(
   const botId = String(me.id);
 
   const secret = String(cfg.webhookSecret ?? "").trim();
+  const downloadMedia = cfg.downloadMedia !== false;
+  const mediaDir = String(cfg.mediaDir ?? "").trim() || undefined;
+  const maxDownloadBytes =
+    typeof cfg.maxDownloadBytes === "number" && Number.isFinite(cfg.maxDownloadBytes) && cfg.maxDownloadBytes > 0
+      ? Math.floor(cfg.maxDownloadBytes)
+      : 20 * 1024 * 1024;
   const dedupeLastMessageId = new Map<string, string>(); // conversationKey -> last message_id
 
   async function emit(event: any): Promise<void> {
     const { channelId, userId, text } = normalizeDiscordMessage(event);
-    if (!channelId || !text) return;
+    if (!channelId) return;
 
     // Ignore messages from the bot itself
     if (userId === botId) return;
@@ -129,16 +161,133 @@ export async function createChannelAdapter(
       dedupeLastMessageId.set(conversationKey, messageId);
     }
 
+    const conversationPathParts = [
+      "discord",
+      `bot-${botId}`,
+      `channel-${channelId}`,
+    ];
+
+    const attachments: InboundAttachment[] = [];
+    const rawAtts = Array.isArray(event?.attachments) ? event.attachments : [];
+    if (downloadMedia && rawAtts.length > 0) {
+      const baseDir = resolveMediaDir(ctx.workspaceRoot, mediaDir);
+      const dir = path.join(baseDir, ...conversationPathParts, "inbound");
+      await mkdir(dir, { recursive: true });
+
+      for (const a of rawAtts) {
+        const url = typeof a?.url === "string" ? a.url : "";
+        if (!url) continue;
+        const filename = sanitizeFilename(typeof a?.filename === "string" ? a.filename : "");
+        const contentType = typeof a?.content_type === "string" ? a.content_type : undefined;
+        const sizeBytes = typeof a?.size === "number" ? a.size : undefined;
+        if (typeof sizeBytes === "number" && sizeBytes > maxDownloadBytes) {
+          attachments.push({
+            kind: contentType?.startsWith("image/")
+              ? "image"
+              : contentType?.startsWith("audio/")
+                ? "audio"
+                : contentType?.startsWith("video/")
+                  ? "video"
+                  : "file",
+            path: "",
+            mimeType: contentType,
+            originalName: filename || undefined,
+            sizeBytes,
+            source: { discord: { url, skipped: "too_large" } },
+          });
+          continue;
+        }
+
+        try {
+          const res = await fetch(url, { method: "GET" });
+          if (!res.ok) continue;
+          const buf = new Uint8Array(await res.arrayBuffer());
+          if (buf.byteLength > maxDownloadBytes) {
+            attachments.push({
+              kind: contentType?.startsWith("image/")
+                ? "image"
+                : contentType?.startsWith("audio/")
+                  ? "audio"
+                  : contentType?.startsWith("video/")
+                    ? "video"
+                    : "file",
+              path: "",
+              mimeType: contentType,
+              originalName: filename || undefined,
+              sizeBytes: buf.byteLength,
+              source: { discord: { url, skipped: "too_large" } },
+            });
+            continue;
+          }
+          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const outName = sanitizeFilename(`${stamp}-${filename || "attachment"}`);
+          const outPath = path.join(dir, outName);
+          await writeFile(outPath, buf);
+
+          attachments.push({
+            kind: contentType?.startsWith("image/")
+              ? "image"
+              : contentType?.startsWith("audio/")
+                ? "audio"
+                : contentType?.startsWith("video/")
+                  ? "video"
+                  : "file",
+            path: outPath,
+            mimeType: contentType,
+            originalName: filename || undefined,
+            sizeBytes: buf.byteLength,
+            source: { discord: { url } },
+          });
+        } catch (e) {
+          ctx.logger?.errorWith("discord attachment download failed", e, {
+            channel: "discord",
+            conversationKey,
+            url,
+          });
+        }
+      }
+    } else if (!downloadMedia && rawAtts.length > 0) {
+      for (const a of rawAtts) {
+        const url = typeof a?.url === "string" ? a.url : "";
+        const filename = typeof a?.filename === "string" ? a.filename : undefined;
+        const contentType = typeof a?.content_type === "string" ? a.content_type : undefined;
+        const sizeBytes = typeof a?.size === "number" ? a.size : undefined;
+        attachments.push({
+          kind: contentType?.startsWith("image/")
+            ? "image"
+            : contentType?.startsWith("audio/")
+              ? "audio"
+              : contentType?.startsWith("video/")
+                ? "video"
+                : "file",
+          path: "",
+          mimeType: contentType,
+          originalName: filename,
+          sizeBytes,
+          source: { discord: { url, skipped: "download_disabled" } },
+        });
+      }
+    }
+
+    const textParts = [String(text ?? "").trim()].filter(Boolean);
+    if (attachments.length > 0) {
+      const lines = attachments.map((a) =>
+        a.path
+          ? `[attachment] ${a.kind}: ${a.originalName ? `${a.originalName} ` : ""}saved to ${a.path}`
+          : `[attachment] ${a.kind}: ${a.originalName ? `${a.originalName} ` : ""}(not downloaded)`,
+      );
+      textParts.push(lines.join("\n"));
+    }
+    const finalText = textParts.join("\n\n").trim();
+    if (!finalText) return;
+
     const inbound: InboundMessage = {
       channel: "discord",
       conversationKey,
-      conversationPathParts: [
-        "discord",
-        `bot-${botId}`,
-        `channel-${channelId}`,
-      ],
+      conversationPathParts,
       userId,
-      text,
+      text: finalText,
+      attachments: attachments.length ? attachments : undefined,
       raw: event,
     };
 

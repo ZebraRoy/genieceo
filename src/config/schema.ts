@@ -45,6 +45,11 @@ const LlmConfigV2Schema = z
   .object({
     activeProfile: z.string().min(1).optional(),
     profiles: z.record(z.string().min(1), LlmProfileSchema).default({}),
+    /**
+     * Max bytes per inbound image to embed into the LLM prompt (base64).
+     * If unset, GenieCEO uses a conservative default.
+     */
+    maxImageBytes: z.number().int().min(1).optional(),
   })
   .default({ profiles: {} });
 

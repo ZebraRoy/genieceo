@@ -53,6 +53,7 @@ genieceo --help
 - `prompts/`: prompt files loaded into the system prompt
   - `IDENTITY.md`, `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`
 - `sessions/`: chat sessions saved as JSONL
+- `media/`: downloaded inbound channel attachments (images/voice/video/files)
 - `services/`: managed long-running services (PID + metadata JSON)
 - `logs/`: gateway logs (and future logs)
 - `plugins/`: channel plugins loaded by `genieceo gateway`
@@ -80,7 +81,8 @@ genieceo --help
         "model": "claude-3-5-haiku-20241022",
         "apiKey": "sk-ant-..."
       }
-    }
+    },
+    "maxImageBytes": 2097152
   },
   "webSearch": {
     "order": ["brave", "tavily", "duckduckgo"],
@@ -97,12 +99,16 @@ genieceo --help
       "enabled": true,
       "botToken": "123456:ABC-DEF...",
       "webhookSecretToken": "a-random-secret",
-      "publicDomain": "https://xxxx.trycloudflare.com"
+      "publicDomain": "https://xxxx.trycloudflare.com",
+      "downloadMedia": true,
+      "maxDownloadBytes": 20971520
     },
     "discord": {
       "enabled": true,
       "botToken": "YOUR_DISCORD_BOT_TOKEN",
-      "webhookSecret": "optional-webhook-secret"
+      "webhookSecret": "optional-webhook-secret",
+      "downloadMedia": true,
+      "maxDownloadBytes": 20971520
     },
     "line": {
       "enabled": true,
@@ -162,6 +168,19 @@ curl -sS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
 The gateway verifies `X-Telegram-Bot-Api-Secret-Token` if you set `channels.telegram.webhookSecretToken` (optional but recommended).
 
 You can also set `channels.telegram.parse_mode` to control outgoing formatting (`HTML` or `MarkdownV2`; legacy `Markdown` is also supported).
+
+Inbound attachments (Telegram / Discord):
+
+- GenieCEO can download inbound attachments (images, voice, videos, documents) into `~/.genieceo/media/`.
+- Telegram/Discord configs support:
+  - `downloadMedia`: `true` (default) to download attachments
+  - `mediaDir`: override the media directory (absolute path or relative to `~/.genieceo/`)
+  - `maxDownloadBytes`: cap per attachment (default: 20MB)
+
+Image understanding (vision models):
+
+- If your active model supports image input, GenieCEO will embed up to 4 inbound images into the prompt (base64).
+- Control per-image cap with `llm.maxImageBytes` (default is conservative).
 
 #### Discord Setup
 

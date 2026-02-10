@@ -66,6 +66,7 @@ export class GatewayMessageRouter {
       channel: msg.channel,
       conversationKey: msg.conversationKey,
       textLen: msg.text?.length ?? 0,
+      attachments: Array.isArray(msg.attachments) ? msg.attachments.length : 0,
     });
     const control = this.parseControlCommand(msg.text);
     if (control === "reset") {
@@ -84,6 +85,7 @@ export class GatewayMessageRouter {
         runtime: this.runtime,
         messages,
         userText: msg.text,
+        attachments: msg.attachments,
         conversation: {
           channel: msg.channel,
         },

@@ -26,7 +26,39 @@ export type InboundMessage = {
   conversationPathParts: string[];
   userId?: string;
   text: string;
+  /**
+   * Optional inbound attachments saved to disk (e.g. images, voice notes, videos, documents).
+   * Channel plugins are responsible for downloading to a local path and populating this field.
+   */
+  attachments?: InboundAttachment[];
   raw?: any;
+};
+
+export type InboundAttachment = {
+  /**
+   * High-level type. Keep this coarse so channels can map their native media types.
+   */
+  kind: "image" | "audio" | "video" | "file";
+  /**
+   * Absolute path to the downloaded media file.
+   */
+  path: string;
+  /**
+   * Best-effort MIME type (if known).
+   */
+  mimeType?: string;
+  /**
+   * Original filename from the channel (if provided).
+   */
+  originalName?: string;
+  /**
+   * Best-effort size in bytes (if known).
+   */
+  sizeBytes?: number;
+  /**
+   * Channel-specific reference (e.g. Telegram file_id, Discord URL).
+   */
+  source?: Record<string, any>;
 };
 
 export type OutboundMessage = {

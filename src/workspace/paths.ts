@@ -31,6 +31,10 @@ export function getSkillsDir(workspaceRoot: string = getWorkspaceRoot()): string
   return path.join(workspaceRoot, "skills");
 }
 
+export function getMediaDir(workspaceRoot: string = getWorkspaceRoot()): string {
+  return path.join(workspaceRoot, "media");
+}
+
 export function getConfigPath(workspaceRoot: string = getWorkspaceRoot()): string {
   return path.join(workspaceRoot, "config.json");
 }
