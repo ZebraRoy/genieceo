@@ -9,12 +9,14 @@ import {
   getServicesDir,
   getSessionsDir,
   getSkillsDir,
+  getSubagentsDir,
   getWorkspaceRoot,
 } from "./paths.js";
 import { getInstalledTemplatesDir, PROMPT_TEMPLATE_FILES } from "./templates.js";
 import { getDefaultConfig } from "../config/schema.js";
 import { getInstalledBuiltinSkillsDir } from "./builtin-skills.js";
 import { buildSkillsIndex } from "../skills/index.js";
+import { buildSubagentsIndex } from "../subagents/index.js";
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -33,9 +35,11 @@ export async function ensureWorkspace(workspaceRoot: string = getWorkspaceRoot()
   await mkdir(getServicesDir(workspaceRoot), { recursive: true });
   await mkdir(getPluginsDir(workspaceRoot), { recursive: true });
   await mkdir(getSkillsDir(workspaceRoot), { recursive: true });
+  await mkdir(getSubagentsDir(workspaceRoot), { recursive: true });
 
   await ensurePromptTemplates(workspaceRoot, { overwrite: false });
   await ensureBaselineSkills(workspaceRoot, { overwrite: false });
+  await ensureBaselineSubagents(workspaceRoot, { overwrite: false });
 
   // Create empty config.json placeholder (onboard will populate).
   const configPath = getConfigPath(workspaceRoot);
@@ -72,6 +76,51 @@ export async function ensureBaselineSkills(workspaceRoot: string, opts: { overwr
   const dst = path.join(skillsDir, "manage-skills");
   if (!(await exists(src))) return;
   await copyDirRecursive(src, dst, opts);
+}
+
+/**
+ * Seeds a minimal set of built-in subagents so delegation works out of the box.
+ * Subagents live under ~/.genieceo/subagents/<name>/AGENT.md.
+ */
+export async function ensureBaselineSubagents(workspaceRoot: string, opts: { overwrite: boolean }): Promise<void> {
+  const subagentsDir = getSubagentsDir(workspaceRoot);
+
+  // Baseline: audio-analyst (uses audio_transcribe tool).
+  const name = "audio-analyst";
+  const dir = path.join(subagentsDir, name);
+  const agentMdPath = path.join(dir, "AGENT.md");
+  if (!opts.overwrite && (await exists(agentMdPath))) return;
+
+  await mkdir(dir, { recursive: true });
+
+  const content = [
+    "---",
+    "name: audio-analyst",
+    "description: Transcribe and analyze audio files.",
+    "profile: openai:gpt-5-mini",
+    "tools:",
+    "  - audio_transcribe",
+    "  - read_file",
+    "  - web_search",
+    "  - web_fetch",
+    "disallowedTools:",
+    "  - run_command",
+    "---",
+    "",
+    "You are the **audio-analyst** subagent.",
+    "",
+    "## What you do",
+    "- When the user provides an audio file path (or you see an audio attachment path), call `audio_transcribe` on it.",
+    "- Then analyze the transcript and return: a short summary, key points, and any action items.",
+    "",
+    "## Output format",
+    "- Summary (2-4 sentences)",
+    "- Key points (bullets)",
+    "- Action items (bullets, if any)",
+    "",
+  ].join("\n");
+
+  await writeFile(agentMdPath, content, "utf8");
 }
 
 export async function installBuiltinSkills(
@@ -216,6 +265,30 @@ export async function loadSystemPrompt(workspaceRoot: string): Promise<string> {
   if (skillsLines.length === 0) skillsLines.push("- [none installed]");
 
   parts.push(`## SKILLS_INDEX\n\n${skillsLines.join("\n")}`);
+
+  // Append a compact, metadata-only index of subagents (progressive disclosure).
+  const subagentsDir = getSubagentsDir(workspaceRoot);
+  const { subagents, skipped: subSkipped, truncated: subTruncated } = await buildSubagentsIndex(subagentsDir, { limit: 200 });
+
+  const subLines: string[] = [];
+  for (const s of subagents) {
+    const profile = s.profile ? ` (profile: ${s.profile})` : "";
+    subLines.push(`- ${s.name}: ${s.description}${profile}`);
+  }
+  if (subTruncated) subLines.push(`- [truncated]`);
+  if (subLines.length === 0) subLines.push("- [none installed]");
+
+  parts.push(`## SUBAGENTS_INDEX\n\n${subLines.join("\n")}`);
+
+  // Don't spam: only include a small diagnostic if something is wrong.
+  if (subSkipped.length > 0) {
+    const sample = subSkipped.slice(0, 5).map((x) => `- ${path.basename(x.dir)}: ${x.reason}`);
+    parts.push(
+      `## SUBAGENTS_INDEX_NOTES\n\nSkipped ${subSkipped.length} invalid subagent folder(s). Fix or remove them.\n\n${sample.join("\n")}${
+        subSkipped.length > sample.length ? "\n- [more omitted]" : ""
+      }`
+    );
+  }
 
   // Don't spam: only include a small diagnostic if something is wrong.
   if (skipped.length > 0) {

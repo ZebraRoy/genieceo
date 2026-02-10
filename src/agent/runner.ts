@@ -1,6 +1,4 @@
 import type { AssistantMessage, Context, Message, Model, Tool } from "@mariozechner/pi-ai";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 import type { GenieCeoConfig } from "../config/schema.js";
 import { loadConfig } from "../config/store.js";
@@ -18,6 +16,8 @@ import { getLogsDir, getServicesDir, getWorkspaceRoot } from "../workspace/paths
 import { defaultShellAllowedRoots, normalizeFileAccessMode } from "../tools/path-access.js";
 import type { InboundAttachment, OutboundMessage } from "../plugins/types.js";
 import { runWithToolTurnContext } from "../tools/turn-context.js";
+import { buildUserContent } from "./user-content.js";
+import { renderAssistantText } from "./render.js";
 
 export type AgentRuntime = {
   workspaceRoot: string;
@@ -38,89 +38,6 @@ export type ConversationContext = {
    */
   channel?: string;
 };
-
-export function renderAssistantText(msg: any): string {
-  const content = msg?.content;
-  if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    const parts: string[] = [];
-    for (const b of content) {
-      if (!b) continue;
-      if (b.type === "text" && typeof b.text === "string") parts.push(b.text);
-      else if (typeof (b as any).text === "string") parts.push(String((b as any).text));
-    }
-    return parts.join("").trim();
-  }
-  // Extremely defensive fallback.
-  if (content && typeof content === "object" && typeof (content as any).text === "string") return String((content as any).text).trim();
-  return "";
-}
-
-function guessImageMimeType(p: string): string {
-  const ext = path.extname(p).toLowerCase();
-  if (ext === ".png") return "image/png";
-  if (ext === ".webp") return "image/webp";
-  if (ext === ".gif") return "image/gif";
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
-  return "image/jpeg";
-}
-
-async function buildUserContent(opts: {
-  runtime: AgentRuntime;
-  userText: string;
-  attachments?: InboundAttachment[];
-}): Promise<{
-  modelContent: string | Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
-  sessionText: string;
-}> {
-  const baseText = String(opts.userText ?? "").trim();
-  const atts = Array.isArray(opts.attachments) ? opts.attachments : [];
-  if (atts.length === 0) return { modelContent: baseText, sessionText: baseText };
-
-  const lines: string[] = [];
-  for (const a of atts) {
-    const name = a.originalName ? ` (${a.originalName})` : "";
-    const mt = a.mimeType ? ` ${a.mimeType}` : "";
-    const sz = typeof a.sizeBytes === "number" ? ` ${a.sizeBytes}B` : "";
-    if (a.path) lines.push(`- ${a.kind}${name}${mt}${sz}: ${a.path}`);
-    else lines.push(`- ${a.kind}${name}${mt}${sz}: [not downloaded]`);
-  }
-
-  const sessionText = [baseText, "Attachments:", ...lines].filter(Boolean).join("\n");
-
-  const modelInputs: string[] = Array.isArray((opts.runtime.model as any)?.input)
-    ? ((opts.runtime.model as any).input as string[])
-    : [];
-  const supportsImages = modelInputs.includes("image");
-  if (!supportsImages) return { modelContent: sessionText, sessionText };
-
-  const maxImages = 4;
-  const maxImageBytes =
-    typeof (opts.runtime.config as any)?.llm?.maxImageBytes === "number"
-      ? Math.floor((opts.runtime.config as any).llm.maxImageBytes)
-      : 2 * 1024 * 1024; // 2MB per image
-
-  const blocks: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
-    { type: "text", text: sessionText },
-  ];
-
-  let embedded = 0;
-  for (const a of atts) {
-    if (embedded >= maxImages) break;
-    if (a.kind !== "image" || !a.path) continue;
-    try {
-      const buf = await readFile(a.path);
-      if (buf.byteLength > maxImageBytes) continue;
-      const mimeType = a.mimeType && a.mimeType.startsWith("image/") ? a.mimeType : guessImageMimeType(a.path);
-      blocks.push({ type: "image", data: buf.toString("base64"), mimeType });
-      embedded++;
-    } catch {
-      // best-effort only
-    }
-  }
-
-  return { modelContent: blocks, sessionText };
-}
 
 export async function createAgentRuntime(opts?: {
   workspaceRoot?: string;
@@ -230,7 +147,8 @@ export async function runAgentTurn(opts: {
 
   const startLen = context.messages.length;
   const { modelContent, sessionText } = await buildUserContent({
-    runtime: opts.runtime,
+    model: opts.runtime.model,
+    config: opts.runtime.config,
     userText: opts.userText,
     attachments: opts.attachments,
   });

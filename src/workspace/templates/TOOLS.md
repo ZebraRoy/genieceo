@@ -43,6 +43,21 @@ If you need to start a command that should keep running beyond the current turn 
 - `service_tail_logs`: inspect recent logs
 - `service_stop`: stop a managed service
 
+## Subagents (delegation)
+Use subagents when the user’s request needs a **specialized prompt**, **different default model/profile**, or a **restricted toolset**.
+
+Tools:
+- `subagent_list`: discover what subagents exist
+- `subagent_create`: create/update a subagent under `~/.genieceo/subagents/<name>/AGENT.md`
+- `subagent_run`: run a subagent and get its final text output back
+
+Recommended pattern:
+- If you (the main agent) are not well-suited for a job, create or reuse a subagent and run it.
+- Pass file paths (e.g. `~/.genieceo/media/...`) in the `input`/attachments for the subagent.
+
+## Audio transcription
+If a task requires understanding audio, use `audio_transcribe` to convert audio → text, then analyze the transcript (possibly via a subagent like `audio-analyst`).
+
 ## Tool-loop limits
 - Each turn is limited to **20** tool-call iterations. If you exceed this, the turn fails.
 
