@@ -43,7 +43,7 @@ export function registerAudioTools(
     {
       name: "audio_transcribe",
       description:
-        "Transcribe an audio file into text using OpenAI's transcription API (Whisper). Requires an OpenAI LLM profile with apiKey in ~/.genieceo/config.json.",
+        "Transcribe an audio file into text using OpenAI's transcription API. Requires an OpenAI LLM profile with apiKey in ~/.genieceo/config.json.",
       parameters: Type.Object({
         path: Type.String({ minLength: 1, description: "Audio file path (relative or absolute; resolved by scope)." }),
         scope: Type.Optional(
@@ -62,7 +62,7 @@ export function registerAudioTools(
         transcriptionModel: Type.Optional(
           Type.String({
             minLength: 1,
-            description: "OpenAI transcription model name. Default: whisper-1.",
+            description: "OpenAI transcription model name. Default: gpt-4o-transcribe.",
           }),
         ),
         language: Type.Optional(
@@ -117,7 +117,9 @@ export function registerAudioTools(
       const url = joinUrl(apiBase, "/audio/transcriptions");
 
       const transcriptionModel =
-        typeof args.transcriptionModel === "string" && args.transcriptionModel.trim() ? String(args.transcriptionModel).trim() : "whisper-1";
+        typeof args.transcriptionModel === "string" && args.transcriptionModel.trim()
+          ? String(args.transcriptionModel).trim()
+          : "gpt-4o-transcribe";
       const language = typeof args.language === "string" && args.language.trim() ? String(args.language).trim() : undefined;
 
       const buf = await readFile(absPath);
