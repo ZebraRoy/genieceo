@@ -21,6 +21,7 @@ function guessAudioMimeTypeFromExt(p: string): string | undefined {
     ".mp3": "audio/mpeg",
     ".m4a": "audio/mp4",
     ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
     ".wav": "audio/wav",
     ".webm": "audio/webm",
     ".mp4": "audio/mp4",
@@ -116,11 +117,23 @@ export function registerAudioTools(
       const apiBase = profile?.apiBase ? String(profile.apiBase) : "https://api.openai.com/v1";
       const url = joinUrl(apiBase, "/audio/transcriptions");
 
-      const transcriptionModel =
+      const transcriptionModelRaw =
         typeof args.transcriptionModel === "string" && args.transcriptionModel.trim()
           ? String(args.transcriptionModel).trim()
           : "gpt-4o-transcribe";
       const language = typeof args.language === "string" && args.language.trim() ? String(args.language).trim() : undefined;
+
+      // NOTE: OpenAI's GPT-4o transcription model snapshots don't currently accept OGG/OGA
+      // (common for Telegram voice notes). For those containers, fall back to whisper-1 so
+      // voice messages work out of the box.
+      const ext = path.extname(absPath).toLowerCase();
+      const isOggContainer = ext === ".ogg" || ext === ".oga";
+      const isGpt4oTranscribeModel =
+        transcriptionModelRaw === "gpt-4o-transcribe" ||
+        transcriptionModelRaw === "gpt-4o-mini-transcribe" ||
+        transcriptionModelRaw === "gpt-4o-transcribe-diarize";
+      const transcriptionModel =
+        isOggContainer && isGpt4oTranscribeModel ? "whisper-1" : transcriptionModelRaw;
 
       const buf = await readFile(absPath);
       const filename = path.basename(absPath);
