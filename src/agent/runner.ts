@@ -82,6 +82,7 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
     configuredRoots: configuredShellRoots,
   });
 
+  const maxToolIterationsText = typeof DEFAULT_MAX_TOOL_ITERATIONS === "number" ? String(DEFAULT_MAX_TOOL_ITERATIONS) : "unlimited";
   const lines = [
     "## RUNTIME_CONTEXT",
     "",
@@ -96,7 +97,7 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
     `- execution.shellAccessMode: ${shellAccessMode}`,
     `- execution.shell.allowedRoots (configured): ${configuredShellRoots.length ? configuredShellRoots.join(", ") : "[empty]"}`,
     `- run_command allowed roots (effective): ${effectiveShellRoots.join(", ")}`,
-    `- max tool-call iterations per turn: ${DEFAULT_MAX_TOOL_ITERATIONS}`,
+    `- max tool-call iterations per turn: ${maxToolIterationsText}`,
     `- gateway reload behavior: no hot reload (plugin/config changes require gateway restart)`,
   ];
 

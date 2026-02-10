@@ -18,7 +18,13 @@ export class LlmConfigError extends Error {
   name = "LlmConfigError";
 }
 
-export const DEFAULT_MAX_TOOL_ITERATIONS = 20;
+/**
+ * Default tool-loop cap per turn.
+ *
+ * If undefined, the tool loop runs until the model stops emitting tool calls
+ * (i.e. token/context limits become the practical bound).
+ */
+export const DEFAULT_MAX_TOOL_ITERATIONS: number | undefined = undefined;
 
 export type AgentLoopEvent =
   | { type: "model_start"; iteration: number; provider: string; modelId: string }
@@ -65,7 +71,10 @@ export async function completeWithToolLoop(opts: {
 
   opts.context.tools = opts.tools;
 
-  for (let i = 0; i < maxIterations; i++) {
+  for (let i = 0; ; i++) {
+    if (typeof maxIterations === "number" && i >= maxIterations) {
+      throw new Error(`Max tool iterations reached (${maxIterations}).`);
+    }
     opts.onEvent?.({
       type: "model_start",
       iteration: i,
@@ -175,7 +184,5 @@ export async function completeWithToolLoop(opts: {
       opts.context.messages.push(toolResult);
     }
   }
-
-  throw new Error(`Max tool iterations reached (${maxIterations}).`);
 }
 

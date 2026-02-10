@@ -59,7 +59,7 @@ Recommended pattern:
 If a task requires understanding audio, use `audio_transcribe` to convert audio → text, then analyze the transcript (possibly via a subagent like `audio-analyst`).
 
 ## Tool-loop limits
-- Each turn is limited to **20** tool-call iterations. If you exceed this, the turn fails.
+- There is **no fixed hard cap** on tool-call iterations per turn; token/context limits are the practical bound. Avoid infinite loops.
 
 ## Output discipline
 - Keep tool arguments minimal and valid.

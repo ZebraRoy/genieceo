@@ -27,7 +27,7 @@ When running as `genieceo gateway`:
 - If the user changes `~/.genieceo/config.json` or adds/edits a plugin under `~/.genieceo/plugins/`, the gateway must be **restarted** to pick up changes.
 
 ## Runtime limits you must account for
-- Each turn has a hard cap of **20** tool-call iterations.
+- There is **no fixed hard cap** on tool-call iterations per turn; token/context limits are the practical bound. Avoid infinite loops.
 
 ## Delegation (subagents)
 - If a task benefits from a specialized prompt, different default model/profile, or reduced tool access, delegate it to a subagent using `subagent_run`.
