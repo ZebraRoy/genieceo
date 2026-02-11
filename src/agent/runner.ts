@@ -67,7 +67,9 @@ export async function createAgentRuntime(opts?: {
   };
 }
 
-function renderRuntimeContext(runtime: AgentRuntime): string {
+function renderRuntimeContext(runtime: AgentRuntime, nowMs: number): string {
+  const nowIsoUtc = new Date(nowMs).toISOString();
+  const todayUtc = nowIsoUtc.slice(0, 10);
   const fileAccessMode = normalizeFileAccessMode((runtime.config as any)?.execution?.fileAccessMode);
   const shellAccessMode = normalizeFileAccessMode((runtime.config as any)?.execution?.shellAccessMode);
   const shellEnabled = Boolean((runtime.config as any)?.execution?.shell?.enabled);
@@ -88,6 +90,9 @@ function renderRuntimeContext(runtime: AgentRuntime): string {
     "",
     "These facts describe the **actual** GenieCEO runtime for this conversation. Treat them as ground truth.",
     "",
+    `- nowUtc: ${nowIsoUtc}`,
+    `- todayUtc: ${todayUtc}`,
+    `- timezone: UTC`,
     `- workspaceRoot: ${runtime.workspaceRoot}`,
     `- servicesDir: ${getServicesDir(runtime.workspaceRoot)}`,
     `- logsDir: ${getLogsDir(runtime.workspaceRoot)}`,
@@ -138,7 +143,7 @@ export async function runAgentTurn(opts: {
 
   const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
   const convo = renderConversationContext(opts.conversation);
-  const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime)}${convo ? `\n\n---\n\n${convo}` : ""}`;
+  const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime, nowMs)}${convo ? `\n\n---\n\n${convo}` : ""}`;
 
   const context: Context = {
     systemPrompt,
@@ -162,7 +167,7 @@ export async function runAgentTurn(opts: {
   // Refresh system prompt each turn (skills/templates may have changed on disk).
   const refreshedBase = await loadSystemPrompt(opts.runtime.workspaceRoot);
   const refreshedConvo = renderConversationContext(opts.conversation);
-  context.systemPrompt = `${refreshedBase}\n\n---\n\n${renderRuntimeContext(opts.runtime)}${
+  context.systemPrompt = `${refreshedBase}\n\n---\n\n${renderRuntimeContext(opts.runtime, nowMs)}${
     refreshedConvo ? `\n\n---\n\n${refreshedConvo}` : ""
   }`;
 
