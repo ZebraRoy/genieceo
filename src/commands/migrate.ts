@@ -74,13 +74,16 @@ export async function runMigrate(opts: {
 
   const onConflict = runtime && rl
     ? async (conflict: PromptTemplateConflict): Promise<"keep" | "template"> => {
-        const basePrompt = await loadSystemPrompt(workspaceRoot);
-        const systemPrompt = `${basePrompt}\n\n---\n\n## MIGRATE_ASSISTANT\n\nYou are GenieCEO, helping the user migrate prompt templates.\n\nYou are resolving a single markdown file conflict.\n\n- File: ${conflict.filename}\n\nYou have:\n- EXISTING (what the user currently has)\n- TEMPLATE (what this GenieCEO version ships)\n- DIFF (a compact line diff; may be truncated)\n\nRules:\n- You have NO tools available in this chat. Do NOT emit tool calls.\n- Answer the user's questions about what changed and why.\n- If asked to recommend, explain briefly and end with: RECOMMENDATION: keep|template\n- Do NOT output the full file contents unless the user explicitly asks.\n\n### EXISTING\n${conflict.existingContent}\n\n### TEMPLATE\n${conflict.templateContent}\n\n### DIFF\n${conflict.diffText}\n`;
+        const allowedToolNames = new Set(["read_file", "write_file", "edit_file", "list_dir", "run_command"]);
+        const allowedTools = runtime.tools.filter((t) => allowedToolNames.has(t.name));
 
-        const ctx: Context = { systemPrompt, messages: [], tools: [] };
+        const basePrompt = await loadSystemPrompt(workspaceRoot);
+        const systemPrompt = `${basePrompt}\n\n---\n\n## MIGRATE_ASSISTANT\n\nYou are GenieCEO, helping the user migrate prompt templates.\n\nYou are resolving a single markdown file conflict.\n\n- File: ${conflict.filename}\n\nYou have:\n- EXISTING (what the user currently has)\n- TEMPLATE (what this GenieCEO version ships)\n- DIFF (a compact line diff; may be truncated)\n\nTools you MAY use:\n- read_file, write_file, edit_file, list_dir (prefer scope='workspace' and paths like prompts/${conflict.filename})\n- run_command (only if necessary; keep it safe and non-destructive)\n\nMigration guidance:\n- Prefer preserving the user's edits.\n- If you make edits to the existing file, instruct the user to type 'keep' to proceed (so we don't overwrite afterward).\n\nHard rules:\n- Do not delete files.\n- Do not modify anything outside ~/.genieceo/prompts unless the user explicitly asks.\n\nIf asked to recommend, explain briefly and end with: RECOMMENDATION: keep|template.\n\n### EXISTING\n${conflict.existingContent}\n\n### TEMPLATE\n${conflict.templateContent}\n\n### DIFF\n${conflict.diffText}\n`;
+
+        const ctx: Context = { systemPrompt, messages: [], tools: allowedTools as any };
 
         console.log(`\n[conflict] ${conflict.filename}`);
-        console.log(`Type questions to ask GenieCEO about this change.`);
+        console.log(`Chat with GenieCEO about this change (it can use file/shell tools).`);
         console.log(`When ready, type: keep | template`);
         console.log(`Other commands: diff | show existing | show template | recommend | help\n`);
 
@@ -128,9 +131,9 @@ export async function runMigrate(opts: {
             apiKey: runtime.apiKey,
             model: runtime.model,
             context: ctx,
-            tools: [],
+            tools: allowedTools as any,
             registry: runtime.toolRegistry,
-            maxIterations: 2,
+            maxIterations: 10,
             stream: streamEnabled,
             onEvent: (ev) => {
               if (ev.type === "model_text_delta") {
@@ -142,6 +145,14 @@ export async function runMigrate(opts: {
                 process.stdout.write(ev.delta);
               } else if (ev.type === "model_text_end") {
                 if (sawTextDelta) process.stdout.write("\n\n");
+              } else if (ev.type === "tool_execute_start") {
+                if (!startedOutput) {
+                  startedOutput = true;
+                  process.stdout.write("\n");
+                }
+                console.log(`[tool] ${ev.toolName} ...`);
+              } else if (ev.type === "tool_execute_end") {
+                console.log(`[tool] ${ev.toolName} done (${ev.durationMs}ms)${ev.isError ? " [error]" : ""}`);
               }
             },
           });
