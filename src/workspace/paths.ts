@@ -15,6 +15,14 @@ export function getSessionsDir(workspaceRoot: string = getWorkspaceRoot()): stri
   return path.join(workspaceRoot, "sessions");
 }
 
+export function getMemoryDir(workspaceRoot: string = getWorkspaceRoot()): string {
+  return path.join(workspaceRoot, "memory");
+}
+
+export function getLongTermMemoryPath(workspaceRoot: string = getWorkspaceRoot()): string {
+  return path.join(workspaceRoot, "MEMORY.md");
+}
+
 export function getLogsDir(workspaceRoot: string = getWorkspaceRoot()): string {
   return path.join(workspaceRoot, "logs");
 }

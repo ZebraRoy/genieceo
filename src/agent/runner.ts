@@ -19,6 +19,14 @@ import { runWithToolTurnContext } from "../tools/turn-context.js";
 import { buildUserContent } from "./user-content.js";
 import { renderAssistantText } from "./render.js";
 
+type MemoryFlushState = {
+  lastFlushedAtMs: number;
+  lastChars: number;
+  lastMessages: number;
+};
+
+const memoryFlushState = new Map<string, MemoryFlushState>();
+
 export type AgentRuntime = {
   workspaceRoot: string;
   invocationCwd: string;
@@ -65,6 +73,101 @@ export async function createAgentRuntime(opts?: {
     tools,
     toolRegistry,
   };
+}
+
+function estimateMessagesSize(messages: Message[]): { chars: number; messages: number } {
+  let chars = 0;
+  for (const m of messages) {
+    try {
+      chars += JSON.stringify(m ?? null).length;
+    } catch {
+      // best-effort only
+    }
+  }
+  return { chars, messages: messages.length };
+}
+
+async function maybeRunMemoryFlush(opts: {
+  runtime: AgentRuntime;
+  messages: Message[];
+  nowMs: number;
+  conversationKey?: string;
+  conversation?: ConversationContext;
+}): Promise<void> {
+  const cfg: any = (opts.runtime.config as any)?.memory?.flush ?? {};
+  const enabled = cfg.enabled !== false;
+  if (!enabled) return;
+
+  const softThresholdChars =
+    typeof cfg.softThresholdChars === "number" ? cfg.softThresholdChars : 120_000;
+  const softThresholdMessages =
+    typeof cfg.softThresholdMessages === "number" ? cfg.softThresholdMessages : 80;
+  const deltaChars = typeof cfg.deltaChars === "number" ? cfg.deltaChars : 25_000;
+  const deltaMessages = typeof cfg.deltaMessages === "number" ? cfg.deltaMessages : 20;
+  const minIntervalMs = typeof cfg.minIntervalMs === "number" ? cfg.minIntervalMs : 5 * 60 * 1000;
+  const maxToolIterations = typeof cfg.maxToolIterations === "number" ? cfg.maxToolIterations : 6;
+
+  const stats = estimateMessagesSize(opts.messages);
+  const shouldConsider = stats.chars >= softThresholdChars || stats.messages >= softThresholdMessages;
+  if (!shouldConsider) return;
+
+  const key = opts.conversationKey
+    ? `conv:${String(opts.conversationKey)}`
+    : `conv:${String(opts.conversation?.channel ?? "cli")}:no-key`;
+  const prev = memoryFlushState.get(key);
+  if (prev) {
+    if (opts.nowMs - prev.lastFlushedAtMs < minIntervalMs) return;
+    const grownEnough =
+      stats.chars >= prev.lastChars + deltaChars || stats.messages >= prev.lastMessages + deltaMessages;
+    if (!grownEnough) return;
+  }
+
+  // Only allow memory tools during the flush turn.
+  const memoryTools = opts.runtime.tools.filter((t) => t.name.startsWith("memory_"));
+  if (memoryTools.length === 0) return;
+
+  const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
+  const convo = renderConversationContext(opts.conversation);
+  const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime, opts.nowMs)}${
+    convo ? `\n\n---\n\n${convo}` : ""
+  }\n\n---\n\n## MEMORY_FLUSH\n\nYou are running a **silent internal memory flush** (OpenClaw-style). The user must NOT see any output from this turn.\n\nYour job:\n- Write any durable facts/preferences/decisions worth keeping into memory using ONLY the memory tools.\n- Use \`memory_append\` with layer='long_term' for durable facts/preferences.\n- Use \`memory_append\` with layer='daily' for short-term notes for today.\n- If there is nothing to store, do NOT call any tool and respond with exactly: NO_REPLY\n\nHard rules:\n- Do not call any tool except: memory_append, memory_get, memory_list.\n- Do not send messages to the user.\n`;
+
+  const ctx: Context = {
+    systemPrompt,
+    messages: opts.messages.slice(),
+    tools: memoryTools,
+  };
+  ctx.messages.push({
+    role: "user",
+    content:
+      "Session nearing compaction. Store durable memories now. If nothing to store, reply NO_REPLY.",
+    timestamp: opts.nowMs,
+  } as any);
+
+  try {
+    await runWithToolTurnContext(
+      { channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined, conversationKey: opts.conversationKey ? String(opts.conversationKey) : undefined },
+      async () => {
+        await completeWithToolLoop({
+          apiKey: opts.runtime.apiKey,
+          model: opts.runtime.model,
+          context: ctx,
+          tools: memoryTools,
+          registry: opts.runtime.toolRegistry,
+          stream: false,
+          maxIterations: maxToolIterations,
+        });
+      },
+    );
+  } catch {
+    // Best-effort only; never fail the user turn due to flush.
+  } finally {
+    memoryFlushState.set(key, {
+      lastFlushedAtMs: opts.nowMs,
+      lastChars: stats.chars,
+      lastMessages: stats.messages,
+    });
+  }
 }
 
 function renderRuntimeContext(runtime: AgentRuntime, nowMs: number): string {
@@ -140,6 +243,15 @@ export async function runAgentTurn(opts: {
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[]; outboundMessages: OutboundMessage[] }> {
   const nowMs = typeof opts.nowMs === "number" ? opts.nowMs : Date.now();
+
+  // OpenClaw-style pre-compaction memory flush: silent internal turn.
+  await maybeRunMemoryFlush({
+    runtime: opts.runtime,
+    messages: opts.messages,
+    nowMs,
+    conversationKey: opts.conversationKey,
+    conversation: opts.conversation,
+  });
 
   const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
   const convo = renderConversationContext(opts.conversation);

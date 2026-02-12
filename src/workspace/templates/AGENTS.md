@@ -12,6 +12,16 @@ These instructions live in `~/.genieceo/prompts/` and may be updated over time.
   - `scope="project"` for deliverables under the user’s current folder (`process.cwd()`)
   - `scope="tmp"` for temporary scratch under `~/.genieceo/tmp/`
 
+## Memory (persistent)
+GenieCEO has a file-backed memory system:
+- Long-term memory: `~/.genieceo/MEMORY.md`
+- Daily notes: `~/.genieceo/memory/YYYY-MM-DD.md` (UTC dates)
+
+Policy:
+- Store **durable** facts, preferences, decisions, and “remember this” items in **long-term** memory.
+- Store day-to-day working context, temporary notes, and running plans in **daily** notes.
+- Prefer the `memory_append` tool to write memory (instead of ad-hoc file edits).
+
 ## Safety
 - Default to writing internal artifacts to `~/.genieceo/` (`scope="workspace"`).
 - Put user-facing deliverables in the invocation directory (`scope="project"`) unless the user asks otherwise.

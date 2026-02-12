@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   getConfigPath,
   getLogsDir,
+  getLongTermMemoryPath,
+  getMemoryDir,
   getPluginsDir,
   getPromptsDir,
   getServicesDir,
@@ -17,6 +19,7 @@ import { getDefaultConfig } from "../config/schema.js";
 import { getInstalledBuiltinSkillsDir } from "./builtin-skills.js";
 import { buildSkillsIndex } from "../skills/index.js";
 import { buildSubagentsIndex } from "../subagents/index.js";
+import { buildMemoryPromptBlock } from "./memory.js";
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -27,10 +30,132 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
+export type PromptTemplateSyncMode = "existing" | "agentic";
+
+function normalizeEol(s: string): string {
+  return s.replace(/\r\n/g, "\n");
+}
+
+function normalizeForCompare(s: string): string {
+  // Ignore only a single trailing newline difference. (Templates tend to end with \n.)
+  const n = normalizeEol(s);
+  return n.endsWith("\n") ? n.slice(0, -1) : n;
+}
+
+type LineOp = { type: " " | "-" | "+"; line: string };
+
+function buildLineDiffOps(aLines: string[], bLines: string[]): LineOp[] {
+  const n = aLines.length;
+  const m = bLines.length;
+
+  // Guardrail: avoid O(n*m) memory for huge files.
+  if (n * m > 400_000) {
+    return [
+      { type: " ", line: "[diff skipped: file too large to compute line diff safely]" },
+      { type: "-", line: `existing: ${n} lines` },
+      { type: "+", line: `template: ${m} lines` },
+    ];
+  }
+
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = aLines[i] === bLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const ops: LineOp[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (aLines[i] === bLines[j]) {
+      ops.push({ type: " ", line: aLines[i] });
+      i++;
+      j++;
+      continue;
+    }
+    if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ type: "-", line: aLines[i] });
+      i++;
+    } else {
+      ops.push({ type: "+", line: bLines[j] });
+      j++;
+    }
+  }
+  while (i < n) {
+    ops.push({ type: "-", line: aLines[i] });
+    i++;
+  }
+  while (j < m) {
+    ops.push({ type: "+", line: bLines[j] });
+    j++;
+  }
+  return ops;
+}
+
+function renderDiffHunks(
+  ops: LineOp[],
+  opts: { context: number; maxHunks: number; maxLines: number }
+): { text: string; truncated: boolean } {
+  const changeIdx: number[] = [];
+  for (let k = 0; k < ops.length; k++) {
+    if (ops[k].type !== " ") changeIdx.push(k);
+  }
+
+  if (changeIdx.length === 0) return { text: "[no differences]\n", truncated: false };
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  const ctx = opts.context;
+
+  let curStart = Math.max(0, changeIdx[0] - ctx);
+  let curEnd = Math.min(ops.length, changeIdx[0] + ctx + 1);
+  for (let idx = 1; idx < changeIdx.length; idx++) {
+    const k = changeIdx[idx];
+    const s = Math.max(0, k - ctx);
+    const e = Math.min(ops.length, k + ctx + 1);
+    if (s <= curEnd + ctx) {
+      curEnd = Math.max(curEnd, e);
+    } else {
+      ranges.push({ start: curStart, end: curEnd });
+      curStart = s;
+      curEnd = e;
+    }
+  }
+  ranges.push({ start: curStart, end: curEnd });
+
+  const out: string[] = [];
+  let lines = 0;
+  let hunks = 0;
+  let truncated = false;
+
+  for (const r of ranges) {
+    hunks++;
+    if (hunks > opts.maxHunks) {
+      truncated = true;
+      break;
+    }
+    out.push(`@@ lines ${r.start + 1}-${r.end} @@`);
+    for (let k = r.start; k < r.end; k++) {
+      out.push(`${ops[k].type}${ops[k].type === " " ? " " : ""}${ops[k].line}`);
+      lines++;
+      if (lines >= opts.maxLines) {
+        truncated = true;
+        break;
+      }
+    }
+    if (truncated) break;
+    out.push("");
+  }
+
+  if (truncated) out.push("[diff truncated]");
+  return { text: out.join("\n") + "\n", truncated };
+}
+
 export async function ensureWorkspace(workspaceRoot: string = getWorkspaceRoot()): Promise<void> {
   await mkdir(workspaceRoot, { recursive: true });
   await mkdir(getPromptsDir(workspaceRoot), { recursive: true });
   await mkdir(getSessionsDir(workspaceRoot), { recursive: true });
+  await mkdir(getMemoryDir(workspaceRoot), { recursive: true });
   await mkdir(getLogsDir(workspaceRoot), { recursive: true });
   await mkdir(getServicesDir(workspaceRoot), { recursive: true });
   await mkdir(getPluginsDir(workspaceRoot), { recursive: true });
@@ -45,6 +170,12 @@ export async function ensureWorkspace(workspaceRoot: string = getWorkspaceRoot()
   const configPath = getConfigPath(workspaceRoot);
   if (!(await exists(configPath))) {
     await writeFile(configPath, JSON.stringify(getDefaultConfig(), null, 2) + "\n", "utf8");
+  }
+
+  // Create long-term memory placeholder.
+  const memPath = getLongTermMemoryPath(workspaceRoot);
+  if (!(await exists(memPath))) {
+    await writeFile(memPath, "", "utf8");
   }
 }
 
@@ -172,34 +303,149 @@ export async function ensurePromptTemplates(
  */
 export async function syncInstalledPromptTemplates(
   workspaceRoot: string,
-  opts: { overwrite: boolean }
-): Promise<{ copied: string[]; skipped: string[] }> {
+  opts: { overwrite: boolean; mode?: PromptTemplateSyncMode; interactive?: boolean }
+): Promise<{ copied: string[]; skipped: string[]; keptExisting?: string[]; identical?: string[]; conflicts?: string[] }> {
   const templatesDir = getInstalledTemplatesDir();
   const promptsDir = getPromptsDir(workspaceRoot);
   await mkdir(promptsDir, { recursive: true });
 
   const copied: string[] = [];
   const skipped: string[] = [];
+  const keptExisting: string[] = [];
+  const identical: string[] = [];
+  const conflicts: string[] = [];
 
   if (!(await exists(templatesDir))) return { copied, skipped };
 
   const entries = await readdir(templatesDir, { withFileTypes: true });
+  const mode: PromptTemplateSyncMode = opts.mode ?? "existing";
+
+  if (mode === "existing") {
+    for (const ent of entries) {
+      if (!ent.isFile()) continue;
+      if (!ent.name.endsWith(".md")) continue;
+      const src = path.join(templatesDir, ent.name);
+      const dst = path.join(promptsDir, ent.name);
+      if (!opts.overwrite && (await exists(dst))) {
+        skipped.push(ent.name);
+        continue;
+      }
+      await copyFile(src, dst);
+      copied.push(ent.name);
+    }
+
+    copied.sort();
+    skipped.sort();
+    return { copied, skipped };
+  }
+
+  // Agentic mode: compare template vs existing and ask what to do on conflicts.
+  const interactive = opts.interactive ?? true;
+  const isTty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const canPrompt = interactive && isTty;
+
+  let globalPolicy: "keep" | "template" | null = null;
+
+  // Import prompts lazily to avoid pulling them into non-interactive flows.
+  const selectPrompt = async (params: {
+    message: string;
+    choices: Array<{ name: string; value: string; description?: string }>;
+  }): Promise<string> => {
+    const { select } = await import("@inquirer/prompts");
+    return await select(params);
+  };
+
   for (const ent of entries) {
     if (!ent.isFile()) continue;
     if (!ent.name.endsWith(".md")) continue;
+
     const src = path.join(templatesDir, ent.name);
     const dst = path.join(promptsDir, ent.name);
-    if (!opts.overwrite && (await exists(dst))) {
+    const hasDst = await exists(dst);
+
+    if (!hasDst) {
+      await copyFile(src, dst);
+      copied.push(ent.name);
+      continue;
+    }
+
+    const [templateRaw, existingRaw] = await Promise.all([readFile(src, "utf8"), readFile(dst, "utf8")]);
+    const templateCmp = normalizeForCompare(templateRaw);
+    const existingCmp = normalizeForCompare(existingRaw);
+    if (templateCmp === existingCmp) {
+      identical.push(ent.name);
       skipped.push(ent.name);
       continue;
     }
-    await copyFile(src, dst);
-    copied.push(ent.name);
+
+    conflicts.push(ent.name);
+
+    // Non-interactive agentic mode: be conservative (do not overwrite).
+    if (!canPrompt) {
+      keptExisting.push(ent.name);
+      skipped.push(ent.name);
+      continue;
+    }
+
+    if (globalPolicy === "keep") {
+      keptExisting.push(ent.name);
+      skipped.push(ent.name);
+      continue;
+    }
+    if (globalPolicy === "template") {
+      await copyFile(src, dst);
+      copied.push(ent.name);
+      continue;
+    }
+
+    const existingLines = normalizeEol(existingRaw).split("\n");
+    const templateLines = normalizeEol(templateRaw).split("\n");
+    const ops = buildLineDiffOps(existingLines, templateLines);
+    const diff = renderDiffHunks(ops, { context: 3, maxHunks: 8, maxLines: 220 });
+
+    // Prompt loop: allow showing diff then re-asking.
+    while (true) {
+      const action = await selectPrompt({
+        message: `Prompt template conflict: ${ent.name} (existing differs from shipped template)`,
+        choices: [
+          { name: "Keep existing (do not change)", value: "keep" },
+          { name: "Use shipped template (overwrite)", value: "template" },
+          { name: "Show diff", value: "diff", description: diff.truncated ? "Diff is truncated; still useful" : undefined },
+          { name: "Keep existing for ALL remaining conflicts", value: "keepAll" },
+          { name: "Use template for ALL remaining conflicts", value: "templateAll" },
+        ],
+      });
+
+      if (action === "diff") {
+        console.log("");
+        console.log(`--- existing: ${dst}`);
+        console.log(`+++ template: ${src}`);
+        console.log(diff.text.trimEnd());
+        console.log("");
+        continue;
+      }
+
+      if (action === "keep" || action === "keepAll") {
+        if (action === "keepAll") globalPolicy = "keep";
+        keptExisting.push(ent.name);
+        skipped.push(ent.name);
+        break;
+      }
+      if (action === "template" || action === "templateAll") {
+        if (action === "templateAll") globalPolicy = "template";
+        await copyFile(src, dst);
+        copied.push(ent.name);
+        break;
+      }
+    }
   }
 
   copied.sort();
   skipped.sort();
-  return { copied, skipped };
+  keptExisting.sort();
+  identical.sort();
+  conflicts.sort();
+  return { copied, skipped, keptExisting, identical, conflicts };
 }
 
 /**
@@ -252,6 +498,9 @@ export async function loadSystemPrompt(workspaceRoot: string): Promise<string> {
     const content = await readFile(p, "utf8");
     parts.push(`## ${filename}\n\n${content.trim()}`);
   }
+
+  const memoryBlock = await buildMemoryPromptBlock({ workspaceRoot });
+  if (memoryBlock) parts.push(memoryBlock);
 
   // Append a compact, metadata-only index of skills (progressive disclosure).
   const skillsDir = getSkillsDir(workspaceRoot);

@@ -52,6 +52,8 @@ genieceo --help
 - `config.json`: LLM + web search settings
 - `prompts/`: prompt files loaded into the system prompt
   - `IDENTITY.md`, `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`
+- `MEMORY.md`: long-term memory (durable facts/preferences/decisions)
+- `memory/`: daily memory notes (UTC), e.g. `memory/YYYY-MM-DD.md`
 - `sessions/`: chat sessions saved as JSONL
 - `media/`: downloaded inbound channel attachments (images/voice/video/files)
 - `services/`: managed long-running services (PID + metadata JSON)

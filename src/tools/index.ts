@@ -8,10 +8,12 @@ import { registerServiceTools } from "./builtin/services.js";
 import { registerWebTools } from "./builtin/web.js";
 import { registerSubagentTools } from "./builtin/subagents.js";
 import { registerAudioTools } from "./builtin/audio.js";
+import { registerMemoryTools } from "./builtin/memory.js";
 
 export function createToolRegistry(ctx: ToolExecutionContext): ToolRegistry {
   const reg = new ToolRegistry();
   registerFileTools(reg, ctx);
+  registerMemoryTools(reg, ctx);
   registerWebTools(reg, ctx);
   registerShellTools(reg, ctx);
   registerServiceTools(reg, ctx);

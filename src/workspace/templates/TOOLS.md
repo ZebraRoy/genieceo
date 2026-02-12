@@ -43,6 +43,16 @@ If you need to start a command that should keep running beyond the current turn 
 - `service_tail_logs`: inspect recent logs
 - `service_stop`: stop a managed service
 
+## Memory tools (persistent notes)
+GenieCEO keeps persistent memory on disk:
+- `~/.genieceo/MEMORY.md` (long-term)
+- `~/.genieceo/memory/YYYY-MM-DD.md` (daily, UTC)
+
+Tools:
+- `memory_append`: write memory (prefer this when the user says “remember this”)
+- `memory_get`: read raw memory files (usually unnecessary because memory is injected into the system prompt each turn)
+- `memory_list`: list recent memory files
+
 ## Subagents (delegation)
 Use subagents when the user’s request needs a **specialized prompt**, **different default model/profile**, or a **restricted toolset**.
 

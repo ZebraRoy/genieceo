@@ -63,15 +63,37 @@ program
   .option("--overwrite", "Overwrite existing prompt and skill files")
   .option("--overwrite-prompts", "Overwrite existing prompt files")
   .option("--overwrite-skills", "Overwrite existing built-in skill files")
-  .action(async (options: { overwrite?: boolean; overwritePrompts?: boolean; overwriteSkills?: boolean }) => {
+  .option("--mode <mode>", "Prompt migration mode: existing|agentic (agentic prompts on conflicts)")
+  .option("--agentic", "Alias for --mode agentic")
+  .action(
+    async (options: {
+      overwrite?: boolean;
+      overwritePrompts?: boolean;
+      overwriteSkills?: boolean;
+      mode?: string;
+      agentic?: boolean;
+    }) => {
     // runMigrate calls ensureWorkspace internally; still print location consistently.
     console.log(`Workspace: ${getWorkspaceRoot()}`);
+
+    const mode =
+      options.mode === undefined
+        ? undefined
+        : options.mode === "existing" || options.mode === "agentic"
+          ? options.mode
+          : (() => {
+              throw new Error(`Invalid --mode "${options.mode}". Expected "existing" or "agentic".`);
+            })();
+
     await runMigrate({
       overwrite: Boolean(options.overwrite),
       overwritePrompts: Boolean(options.overwritePrompts),
       overwriteSkills: Boolean(options.overwriteSkills),
+      mode,
+      agentic: Boolean(options.agentic),
     });
-  });
+  }
+  );
 
 program
   .command("gateway")

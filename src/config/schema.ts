@@ -61,6 +61,51 @@ const WebSearchSchema = z
   })
   .default({ order: ["brave", "tavily", "duckduckgo"] });
 
+const MemoryFlushSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    /**
+     * Rough, character-based threshold to trigger a silent "memory flush" turn
+     * (OpenClaw-style pre-compaction reminder).
+     *
+     * This is an approximation (not token-accurate) but works well enough to
+     * prevent important facts from being lost in long sessions.
+     */
+    softThresholdChars: z.number().int().min(10_000).default(120_000),
+    /**
+     * Also trigger by message count (useful when messages are short but numerous).
+     */
+    softThresholdMessages: z.number().int().min(10).default(80),
+    /**
+     * After a flush, don't flush again until the history grows by at least this delta.
+     */
+    deltaChars: z.number().int().min(1_000).default(25_000),
+    deltaMessages: z.number().int().min(1).default(20),
+    /**
+     * Minimum interval between flush attempts per conversation.
+     */
+    minIntervalMs: z.number().int().min(0).default(5 * 60 * 1000),
+    /**
+     * Bound tool-loop iterations for the flush turn to avoid infinite loops.
+     */
+    maxToolIterations: z.number().int().min(1).max(20).default(6),
+  })
+  .default({
+    enabled: true,
+    softThresholdChars: 120_000,
+    softThresholdMessages: 80,
+    deltaChars: 25_000,
+    deltaMessages: 20,
+    minIntervalMs: 5 * 60 * 1000,
+    maxToolIterations: 6,
+  });
+
+const MemorySchema = z
+  .object({
+    flush: MemoryFlushSchema,
+  })
+  .default({ flush: MemoryFlushSchema.parse({}) });
+
 const GatewaySchema = z
   .object({
     host: z.string().min(1).default("127.0.0.1"),
@@ -108,6 +153,7 @@ const ConfigV2Schema = z.object({
   version: z.literal(2).default(2),
   llm: LlmConfigV2Schema,
   webSearch: WebSearchSchema,
+  memory: MemorySchema,
   execution: ExecutionSchema,
   gateway: GatewaySchema,
   channels: ChannelsSchema,
@@ -145,6 +191,7 @@ export const ConfigSchema = z.preprocess((val) => {
       profiles,
     },
     gateway: GatewaySchema.parse({}),
+    memory: MemorySchema.parse({}),
     channels: {},
   };
 }, ConfigV2Schema);
