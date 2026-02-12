@@ -151,6 +151,18 @@ function renderDiffHunks(
   return { text: out.join("\n") + "\n", truncated };
 }
 
+export type PromptTemplateConflict = {
+  filename: string;
+  srcPath: string;
+  dstPath: string;
+  templateContent: string;
+  existingContent: string;
+  diffText: string;
+  diffTruncated: boolean;
+};
+
+export type PromptTemplateConflictDecision = "keep" | "template";
+
 export async function ensureWorkspace(workspaceRoot: string = getWorkspaceRoot()): Promise<void> {
   await mkdir(workspaceRoot, { recursive: true });
   await mkdir(getPromptsDir(workspaceRoot), { recursive: true });
@@ -303,7 +315,11 @@ export async function ensurePromptTemplates(
  */
 export async function syncInstalledPromptTemplates(
   workspaceRoot: string,
-  opts: { overwrite: boolean; mode?: PromptTemplateSyncMode; interactive?: boolean }
+  opts: {
+    overwrite: boolean;
+    mode?: PromptTemplateSyncMode;
+    onConflict?: (conflict: PromptTemplateConflict) => Promise<PromptTemplateConflictDecision>;
+  }
 ): Promise<{ copied: string[]; skipped: string[]; keptExisting?: string[]; identical?: string[]; conflicts?: string[] }> {
   const templatesDir = getInstalledTemplatesDir();
   const promptsDir = getPromptsDir(workspaceRoot);
@@ -339,22 +355,6 @@ export async function syncInstalledPromptTemplates(
     return { copied, skipped };
   }
 
-  // Agentic mode: compare template vs existing and ask what to do on conflicts.
-  const interactive = opts.interactive ?? true;
-  const isTty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const canPrompt = interactive && isTty;
-
-  let globalPolicy: "keep" | "template" | null = null;
-
-  // Import prompts lazily to avoid pulling them into non-interactive flows.
-  const selectPrompt = async (params: {
-    message: string;
-    choices: Array<{ name: string; value: string; description?: string }>;
-  }): Promise<string> => {
-    const { select } = await import("@inquirer/prompts");
-    return await select(params);
-  };
-
   for (const ent of entries) {
     if (!ent.isFile()) continue;
     if (!ent.name.endsWith(".md")) continue;
@@ -380,63 +380,36 @@ export async function syncInstalledPromptTemplates(
 
     conflicts.push(ent.name);
 
-    // Non-interactive agentic mode: be conservative (do not overwrite).
-    if (!canPrompt) {
-      keptExisting.push(ent.name);
-      skipped.push(ent.name);
-      continue;
-    }
-
-    if (globalPolicy === "keep") {
-      keptExisting.push(ent.name);
-      skipped.push(ent.name);
-      continue;
-    }
-    if (globalPolicy === "template") {
-      await copyFile(src, dst);
-      copied.push(ent.name);
-      continue;
-    }
-
     const existingLines = normalizeEol(existingRaw).split("\n");
     const templateLines = normalizeEol(templateRaw).split("\n");
     const ops = buildLineDiffOps(existingLines, templateLines);
     const diff = renderDiffHunks(ops, { context: 3, maxHunks: 8, maxLines: 220 });
 
-    // Prompt loop: allow showing diff then re-asking.
-    while (true) {
-      const action = await selectPrompt({
-        message: `Prompt template conflict: ${ent.name} (existing differs from shipped template)`,
-        choices: [
-          { name: "Keep existing (do not change)", value: "keep" },
-          { name: "Use shipped template (overwrite)", value: "template" },
-          { name: "Show diff", value: "diff", description: diff.truncated ? "Diff is truncated; still useful" : undefined },
-          { name: "Keep existing for ALL remaining conflicts", value: "keepAll" },
-          { name: "Use template for ALL remaining conflicts", value: "templateAll" },
-        ],
-      });
+    // If overwrite is enabled, overwrite without asking.
+    if (opts.overwrite) {
+      await copyFile(src, dst);
+      copied.push(ent.name);
+      continue;
+    }
 
-      if (action === "diff") {
-        console.log("");
-        console.log(`--- existing: ${dst}`);
-        console.log(`+++ template: ${src}`);
-        console.log(diff.text.trimEnd());
-        console.log("");
-        continue;
-      }
+    const decision = opts.onConflict
+      ? await opts.onConflict({
+          filename: ent.name,
+          srcPath: src,
+          dstPath: dst,
+          templateContent: templateRaw,
+          existingContent: existingRaw,
+          diffText: diff.text,
+          diffTruncated: diff.truncated,
+        })
+      : "keep";
 
-      if (action === "keep" || action === "keepAll") {
-        if (action === "keepAll") globalPolicy = "keep";
-        keptExisting.push(ent.name);
-        skipped.push(ent.name);
-        break;
-      }
-      if (action === "template" || action === "templateAll") {
-        if (action === "templateAll") globalPolicy = "template";
-        await copyFile(src, dst);
-        copied.push(ent.name);
-        break;
-      }
+    if (decision === "template") {
+      await copyFile(src, dst);
+      copied.push(ent.name);
+    } else {
+      keptExisting.push(ent.name);
+      skipped.push(ent.name);
     }
   }
 
