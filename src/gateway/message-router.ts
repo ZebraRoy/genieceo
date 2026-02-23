@@ -112,6 +112,9 @@ export class GatewayMessageRouter {
               channel: msg.channel,
               conversationKey: msg.conversationKey,
               tool: ev.toolName,
+              toolCallId: ev.toolCallId,
+              iteration: ev.iteration,
+              arguments: ev.arguments,
             });
           } else if (ev.type === "tool_execute_end") {
             this.logger?.info("tool end", {
