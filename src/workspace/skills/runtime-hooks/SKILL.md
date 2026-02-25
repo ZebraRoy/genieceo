@@ -37,7 +37,9 @@ Configured keys:
 }
 ```
 
-3. Restart running GenieCEO processes (`genieceo chat` or `genieceo gateway`).
+3. Apply and verify:
+   - `genieceo gateway`: hook changes hot-reload automatically (about 1s).
+   - `genieceo chat`: restart to pick up hook changes.
 4. Verify output (for logging handlers) in `~/.genieceo/logs/*.jsonl`.
 
 ## Handler signatures
@@ -94,7 +96,8 @@ export default async function onEvent(event) {
 - No events:
   - ensure `hooks.enabled` is `true`
   - ensure `hooks.handlerModule` path is correct
-  - restart running processes after config/module changes
+  - for gateway mode, wait 1-2 seconds after edits for hot reload
+  - for chat mode, restart after config/module changes
 - Hook errors:
   - keep `hooks.failOpen: true` for resilience
   - increase `hooks.timeoutMs` if handler is slow

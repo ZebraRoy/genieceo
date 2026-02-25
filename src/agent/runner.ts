@@ -277,7 +277,7 @@ function renderRuntimeContext(runtime: AgentRuntime, nowMs: number): string {
     `- execution.shell.allowedRoots (configured): ${configuredShellRoots.length ? configuredShellRoots.join(", ") : "[empty]"}`,
     `- run_command allowed roots (effective): ${effectiveShellRoots.join(", ")}`,
     `- max tool-call iterations per turn: ${maxToolIterationsText}`,
-    `- gateway reload behavior: no hot reload (plugin/config changes require gateway restart)`,
+    `- gateway reload behavior: hot reload enabled for hooks/plugins/config when running via gateway`,
   ];
 
   return lines.join("\n");

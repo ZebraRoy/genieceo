@@ -143,8 +143,17 @@ const GatewaySchema = z
      * These correspond to records under ~/.genieceo/services/<name>.json created by the service tools.
      */
     autostartServices: z.array(z.string().min(1)).default([]),
+    /**
+     * Automatically reload gateway runtime/plugins when config or plugin files change.
+     */
+    hotReload: z
+      .object({
+        enabled: z.boolean().default(true),
+        intervalMs: z.number().int().min(500).max(60_000).default(2000),
+      })
+      .default({ enabled: true, intervalMs: 2000 }),
   })
-  .default({ host: "127.0.0.1", port: 3000, autostartServices: [] });
+  .default({ host: "127.0.0.1", port: 3000, autostartServices: [], hotReload: { enabled: true, intervalMs: 2000 } });
 
 /**
  * Channel configs are intentionally open-ended so new channels/plugins can

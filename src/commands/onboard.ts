@@ -428,6 +428,10 @@ export async function runOnboard(): Promise<void> {
         )
           ? ((config.gateway as any).autostartServices as string[])
           : [],
+        hotReload: (config.gateway as any)?.hotReload ?? {
+          enabled: true,
+          intervalMs: 2000,
+        },
       }
     : config.gateway;
 

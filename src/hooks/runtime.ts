@@ -1,4 +1,5 @@
 import path from "node:path";
+import { stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import type { GenieCeoConfig } from "../config/schema.js";
@@ -98,18 +99,55 @@ export async function createHookRuntime(opts: {
   if (cached) return cached;
 
   const ctx: HookHandlerContext = { workspaceRoot: opts.workspaceRoot };
+  const reloadCheckIntervalMs = 1000;
+  let lastReloadCheckMs = 0;
+  let loadedMtimeMs: number | null = null;
+  let hooks: HookLike[] = [];
+
+  const loadHandlers = async (mtimeMs?: number): Promise<HookLike[]> => {
+    const version = typeof mtimeMs === "number" ? Math.floor(mtimeMs) : Date.now();
+    const importUrl = `${pathToFileURL(absModule).href}?v=${version}`;
+    const mod = await import(importUrl);
+    return normalizeHooksFromModule(mod, ctx);
+  };
+
+  const maybeReloadHandlers = async (): Promise<void> => {
+    const now = Date.now();
+    if (now - lastReloadCheckMs < reloadCheckIntervalMs) return;
+    lastReloadCheckMs = now;
+
+    const st = await stat(absModule).catch(() => null);
+    if (!st || !st.isFile()) return;
+    const mtimeMs = Math.floor(st.mtimeMs);
+    if (loadedMtimeMs != null && loadedMtimeMs === mtimeMs) return;
+
+    try {
+      const next = await loadHandlers(mtimeMs);
+      if (next.length === 0) {
+        report(opts.logger, "warn", "hook module loaded but no hook handlers were found", { module: absModule });
+        return;
+      }
+      hooks = next;
+      loadedMtimeMs = mtimeMs;
+    } catch (err: any) {
+      const msg = err?.message ? String(err.message) : String(err);
+      report(opts.logger, "warn", "failed to hot-reload hook module", { module: absModule, message: msg });
+    }
+  };
+
   try {
-    const mod = await import(pathToFileURL(absModule).href);
-    const hooks = normalizeHooksFromModule(mod, ctx);
+    hooks = await loadHandlers();
     if (hooks.length === 0) {
       report(opts.logger, "warn", "hook module loaded but no hook handlers were found", { module: absModule });
       runtimeCache.set(cacheKey, disabledRuntime);
       return disabledRuntime;
     }
+    loadedMtimeMs = Math.floor((await stat(absModule).catch(() => null))?.mtimeMs ?? Date.now());
 
     const runtime: HookRuntime = {
       enabled: true,
       emit: async (event) => {
+        await maybeReloadHandlers();
         for (const h of hooks) {
           try {
             const fn = typeof h === "function" ? h : h.onEvent;

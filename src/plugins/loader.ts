@@ -53,7 +53,10 @@ export async function discoverExternalChannelPlugins(opts: {
 export async function loadExternalChannelPlugin(rootDir: string, manifest: ChannelPluginManifest): Promise<LoadedChannelPlugin | null> {
   if (!(await isDirectory(rootDir))) return null;
   const entryAbs = path.resolve(rootDir, manifest.entry);
-  const entryUrl = pathToFileURL(entryAbs).toString();
+  const entryStat = await stat(entryAbs).catch(() => null);
+  if (!entryStat || !entryStat.isFile()) return null;
+  const version = Math.floor(entryStat.mtimeMs);
+  const entryUrl = `${pathToFileURL(entryAbs).toString()}?v=${version}`;
 
   let mod: any;
   try {

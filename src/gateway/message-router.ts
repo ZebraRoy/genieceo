@@ -21,6 +21,11 @@ export class GatewayMessageRouter {
     this.sessionStore = new JsonlSessionStore(runtime.workspaceRoot, runtime.hooks);
   }
 
+  setRuntime(runtime: AgentRuntime): void {
+    this.runtime = runtime;
+    this.sessionStore = new JsonlSessionStore(runtime.workspaceRoot, runtime.hooks);
+  }
+
   static async create(opts: {
     workspaceRoot: string;
     invocationCwd?: string;

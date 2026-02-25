@@ -32,7 +32,9 @@ export default async function onEvent(event) {
 }
 ```
 
-3. Restart GenieCEO (`genieceo chat` or `genieceo gateway`) and run a request.
+3. Run a request:
+   - `genieceo gateway`: hook module changes hot-reload automatically (about 1s).
+   - `genieceo chat`: restart the process to pick up hook changes.
 4. Check `~/.genieceo/logs/hook-events.jsonl`.
 
 If the file is growing, hooks are working.
@@ -157,7 +159,8 @@ export default async function onEvent(event) {
 - No events written:
   - Confirm `hooks.enabled` is `true`.
   - Confirm `hooks.handlerModule` path is correct.
-  - Restart GenieCEO after config/module changes.
+  - For gateway mode, wait 1-2 seconds after edits for hot reload.
+  - For chat mode, restart GenieCEO after config/module changes.
 - Hook module loads but nothing happens:
   - Remove filtering in your handler and log every event first.
 - Timeout warnings:
