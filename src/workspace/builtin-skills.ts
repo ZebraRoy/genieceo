@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const BUILTIN_SKILLS = ["manage-skills", "author-skills", "install-from-github", "discover-skills"] as const;
+export const BUILTIN_SKILLS = ["manage-skills", "author-skills", "install-from-github", "discover-skills", "runtime-hooks"] as const;
 export type BuiltinSkillName = (typeof BUILTIN_SKILLS)[number];
 
 export function getInstalledBuiltinSkillsDir(): string {

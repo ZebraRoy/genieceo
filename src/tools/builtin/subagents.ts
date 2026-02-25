@@ -21,15 +21,18 @@ import { registerShellTools } from "./shell.js";
 import { registerServiceTools } from "./services.js";
 import { registerChannelTools } from "./channel.js";
 import { registerAudioTools } from "./audio.js";
+import { getToolTurnContext } from "../turn-context.js";
 
 function createDefaultRegistry(execCtx: ToolExecutionContext): ToolRegistry {
-  const reg = new ToolRegistry();
+  const reg = new ToolRegistry({ workspaceRoot: execCtx.workspaceRoot });
   registerFileTools(reg, execCtx);
   registerWebTools(reg, execCtx);
   registerShellTools(reg, execCtx);
   registerServiceTools(reg, execCtx);
   registerChannelTools(reg, execCtx);
   registerAudioTools(reg, execCtx);
+  const turn = getToolTurnContext();
+  reg.setHooks(turn?.hooks);
   return reg;
 }
 
@@ -221,15 +224,60 @@ export function registerSubagentTools(
         messages: [{ role: "user", content: modelContent as any, timestamp: Date.now() } as any],
         tools: filteredTools,
       };
+      const turn = getToolTurnContext();
+      const runId = turn?.runId;
+      const channel = turn?.channel;
+      const conversationKey = turn?.conversationKey;
+      const prevMeta = turn?.toolExecMeta;
+      if (turn) {
+        turn.toolExecMeta = {
+          ...(prevMeta ?? {}),
+          runId,
+          scope: "subagent",
+          channel,
+          conversationKey,
+          subagent: {
+            name,
+            profileUsed: resolved.name,
+            parentToolCallId: prevMeta?.toolCallId,
+          },
+        };
+      }
 
-      const assistant = await completeWithToolLoop({
-        apiKey,
-        model,
-        context: context as any,
-        tools: filteredTools,
-        registry: toolRegistry as any,
-        stream: false,
-      });
+      const assistant = await (async () => {
+        try {
+          return await completeWithToolLoop({
+            apiKey,
+            model,
+            context: context as any,
+            tools: filteredTools,
+            registry: toolRegistry as any,
+            stream: false,
+            onEvent: (event) => {
+              if (!turn?.hooks?.enabled) return;
+              void turn.hooks.emit({
+                name: `subagent.loop.${event.type}`,
+                timestampMs: Date.now(),
+                workspaceRoot: ctx.workspaceRoot,
+                scope: "subagent",
+                runId,
+                channel,
+                conversationKey,
+                data: {
+                  event,
+                  subagent: {
+                    name,
+                    profileUsed: resolved.name,
+                    parentToolCallId: prevMeta?.toolCallId,
+                  },
+                },
+              });
+            },
+          });
+        } finally {
+          if (turn) turn.toolExecMeta = prevMeta;
+        }
+      })();
 
       const assistantText = renderAssistantText(assistant);
       return JSON.stringify(

@@ -11,7 +11,7 @@ import { registerAudioTools } from "./builtin/audio.js";
 import { registerMemoryTools } from "./builtin/memory.js";
 
 export function createToolRegistry(ctx: ToolExecutionContext): ToolRegistry {
-  const reg = new ToolRegistry();
+  const reg = new ToolRegistry({ workspaceRoot: ctx.workspaceRoot });
   registerFileTools(reg, ctx);
   registerMemoryTools(reg, ctx);
   registerWebTools(reg, ctx);

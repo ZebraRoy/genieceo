@@ -106,6 +106,25 @@ const MemorySchema = z
   })
   .default({ flush: MemoryFlushSchema.parse({}) });
 
+const HooksSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /**
+     * Path to a custom hooks module.
+     * Absolute paths are used as-is; relative paths resolve from ~/.genieceo.
+     */
+    handlerModule: z.string().min(1).optional(),
+    /**
+     * Per-handler timeout for hook execution.
+     */
+    timeoutMs: z.number().int().min(0).max(60_000).default(2000),
+    /**
+     * If true (default), hook failures never fail runtime operations.
+     */
+    failOpen: z.boolean().default(true),
+  })
+  .default({ enabled: false, timeoutMs: 2000, failOpen: true });
+
 const GatewaySchema = z
   .object({
     host: z.string().min(1).default("127.0.0.1"),
@@ -154,6 +173,7 @@ const ConfigV2Schema = z.object({
   llm: LlmConfigV2Schema,
   webSearch: WebSearchSchema,
   memory: MemorySchema,
+  hooks: HooksSchema,
   execution: ExecutionSchema,
   gateway: GatewaySchema,
   channels: ChannelsSchema,
@@ -192,6 +212,7 @@ export const ConfigSchema = z.preprocess((val) => {
     },
     gateway: GatewaySchema.parse({}),
     memory: MemorySchema.parse({}),
+    hooks: HooksSchema.parse({}),
     channels: {},
   };
 }, ConfigV2Schema);

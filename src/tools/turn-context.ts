@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { OutboundMessage } from "../plugins/types.js";
+import type { HookRuntime } from "../hooks/runtime.js";
+import type { ToolExecutionMetadata } from "../hooks/types.js";
 
 export type ToolTurnContext = {
   /**
@@ -17,6 +19,18 @@ export type ToolTurnContext = {
    * Channel identifier for the current surface (e.g. "telegram", "discord", "line", "cli").
    */
   channel?: string;
+  /**
+   * Optional hook runtime active for this turn.
+   */
+  hooks?: HookRuntime;
+  /**
+   * Logical run identifier for this turn.
+   */
+  runId?: string;
+  /**
+   * Optional execution metadata for the currently running tool.
+   */
+  toolExecMeta?: ToolExecutionMetadata;
 };
 
 const storage = new AsyncLocalStorage<ToolTurnContext>();

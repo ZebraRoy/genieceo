@@ -44,6 +44,9 @@ genieceo --help
 - **Gateway logs**: `genieceo gateway` writes JSON logs to `~/.genieceo/logs/gateway.log`.
   - Increase verbosity: `GENIECEO_DEBUG=1 genieceo gateway` (or `GENIECEO_LOG_LEVEL=debug`)
 - **Tool progress**: gateway logs include `tool start` / `tool end` with durations so you can see what long task it’s doing.
+- **External runtime hooks**: configure `hooks` in `~/.genieceo/config.json` and provide a module to receive lifecycle events (`agent.loop.*`, `subagent.loop.*`, `tool.execute.*`, gateway/session, memory flush, shell/service).
+  - Hook authoring guide: `docs/hooks.md`
+  - Fast start: create `~/.genieceo/hooks/event-log.mjs`, set `"handlerModule": "hooks/event-log.mjs"`, restart `genieceo`, then inspect `~/.genieceo/logs/hook-events.jsonl`.
 
 ### Workspace layout
 

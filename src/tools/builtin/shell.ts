@@ -5,6 +5,7 @@ import type { Tool } from "@mariozechner/pi-ai";
 
 import type { ToolExecutionContext } from "../types.js";
 import { defaultShellAllowedRoots, expandHome, isWithinRoot, normalizeFileAccessMode } from "../path-access.js";
+import { getToolTurnContext } from "../turn-context.js";
 
 function resolveCwd(ctx: ToolExecutionContext, cwdInput: string | undefined): { cwd: string; allowedRoots: string[] } {
   const enabled = Boolean((ctx.config as any)?.execution?.shell?.enabled);
@@ -90,6 +91,23 @@ export function registerShellTools(
       const stdin = args.stdin == null ? null : String(args.stdin);
 
       const startedAt = Date.now();
+      const turn = getToolTurnContext();
+      if (turn?.hooks?.enabled) {
+        await turn.hooks.emit({
+          name: "shell.command.start",
+          timestampMs: startedAt,
+          workspaceRoot: ctx.workspaceRoot,
+          scope: "system",
+          runId: turn.runId,
+          channel: turn.channel,
+          conversationKey: turn.conversationKey,
+          data: {
+            command,
+            cwd,
+            timeoutMs,
+          },
+        });
+      }
 
       return await new Promise<string>((resolve) => {
         const child = spawn(command, {
@@ -127,6 +145,22 @@ export function registerShellTools(
 
         child.on("error", (err) => {
           const msg = err?.message ? String(err.message) : String(err);
+          if (turn?.hooks?.enabled) {
+            void turn.hooks.emit({
+              name: "shell.command.error",
+              timestampMs: Date.now(),
+              workspaceRoot: ctx.workspaceRoot,
+              scope: "system",
+              runId: turn.runId,
+              channel: turn.channel,
+              conversationKey: turn.conversationKey,
+              data: {
+                command,
+                cwd,
+                message: msg,
+              },
+            });
+          }
           resolve(`Error: spawn failed: ${msg}`);
         });
 
@@ -181,6 +215,26 @@ export function registerShellTools(
             (stdout.trimEnd() || "[empty]") +
             "\n\n--- stderr ---\n" +
             (stderr.trimEnd() || "[empty]");
+
+          if (turn?.hooks?.enabled) {
+            void turn.hooks.emit({
+              name: "shell.command.end",
+              timestampMs: Date.now(),
+              workspaceRoot: ctx.workspaceRoot,
+              scope: "system",
+              runId: turn.runId,
+              channel: turn.channel,
+              conversationKey: turn.conversationKey,
+              data: {
+                command,
+                cwd,
+                exitCode: code ?? null,
+                signal: signal ?? null,
+                timedOut: killedByTimeout,
+                elapsedMs,
+              },
+            });
+          }
 
           resolve(out);
         });

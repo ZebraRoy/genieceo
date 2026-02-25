@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import type { GenieCeoConfig } from "../config/schema.js";
 import { getLogsDir, getServicesDir } from "../workspace/paths.js";
 import { defaultShellAllowedRoots, expandHome, isWithinRoot, normalizeFileAccessMode } from "../tools/path-access.js";
+import { createHookRuntime } from "../hooks/runtime.js";
 
 export type ServiceRuntimeContext = {
   workspaceRoot: string;
@@ -163,6 +164,7 @@ export async function startService(ctx: ServiceRuntimeContext, opts: {
   const name = safeServiceName(opts.name);
   const command = String(opts.command ?? "").trim();
   if (!command) throw new Error("command is required");
+  const hooks = await createHookRuntime({ workspaceRoot: ctx.workspaceRoot, config: ctx.config });
 
   const recordPath = getServiceRecordPath(ctx, name);
   const existing = await readServiceRecord(recordPath);
@@ -180,6 +182,16 @@ export async function startService(ctx: ServiceRuntimeContext, opts: {
   await mkdir(logsDir, { recursive: true });
   const logPath = path.join(logsDir, `${name}.log`);
 
+  const startTs = Date.now();
+  if (hooks.enabled) {
+    await hooks.emit({
+      name: "service.lifecycle.start",
+      timestampMs: startTs,
+      workspaceRoot: ctx.workspaceRoot,
+      scope: "system",
+      data: { name, command, cwd, logPath, phase: "before" },
+    });
+  }
   const pid = startDetachedProcess({ command, cwd, logPath });
   const rec: ServiceRecord = {
     version: 1,
@@ -191,16 +203,37 @@ export async function startService(ctx: ServiceRuntimeContext, opts: {
     logPath,
   };
   await writeServiceRecord(recordPath, rec);
+  if (hooks.enabled) {
+    await hooks.emit({
+      name: "service.lifecycle.start",
+      timestampMs: Date.now(),
+      workspaceRoot: ctx.workspaceRoot,
+      scope: "system",
+      data: { name, command, cwd, logPath, pid, phase: "after", elapsedMs: Math.max(0, Date.now() - startTs) },
+    });
+  }
   return rec;
 }
 
 export async function ensureServiceRunning(ctx: ServiceRuntimeContext, nameInput: string): Promise<ServiceRecord> {
   const name = safeServiceName(nameInput);
+  const hooks = await createHookRuntime({ workspaceRoot: ctx.workspaceRoot, config: ctx.config });
   const recordPath = getServiceRecordPath(ctx, name);
   const rec = await readServiceRecord(recordPath);
   if (!rec) throw new Error(`service '${name}' not found (no record at ${recordPath})`);
 
-  if (isPidRunning(rec.pid)) return rec;
+  if (isPidRunning(rec.pid)) {
+    if (hooks.enabled) {
+      await hooks.emit({
+        name: "service.lifecycle.ensure",
+        timestampMs: Date.now(),
+        workspaceRoot: ctx.workspaceRoot,
+        scope: "system",
+        data: { name, pid: rec.pid, restarted: false },
+      });
+    }
+    return rec;
+  }
 
   // Validate + restart using persisted command/cwd/logPath.
   ensureShellEnabled(ctx.config);
@@ -213,6 +246,15 @@ export async function ensureServiceRunning(ctx: ServiceRuntimeContext, nameInput
 
   const updated: ServiceRecord = { ...rec, pid, startedAtMs: Date.now(), cwd: cwdAbs };
   await writeServiceRecord(recordPath, updated);
+  if (hooks.enabled) {
+    await hooks.emit({
+      name: "service.lifecycle.ensure",
+      timestampMs: Date.now(),
+      workspaceRoot: ctx.workspaceRoot,
+      scope: "system",
+      data: { name, pid, restarted: true, cwd: cwdAbs, logPath: rec.logPath },
+    });
+  }
   return updated;
 }
 
@@ -261,6 +303,7 @@ async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
 export async function stopService(ctx: ServiceRuntimeContext, nameInput: string, opts?: { timeoutMs?: number }): Promise<{ name: string; pid: number; running: boolean }> {
   const name = safeServiceName(nameInput);
   ensureShellEnabled(ctx.config);
+  const hooks = await createHookRuntime({ workspaceRoot: ctx.workspaceRoot, config: ctx.config });
 
   const { record } = await getServiceStatus(ctx, name);
   const pid = record.pid;
@@ -286,7 +329,17 @@ export async function stopService(ctx: ServiceRuntimeContext, nameInput: string,
     }
   }
 
-  return { name, pid, running: isPidRunning(pid) };
+  const running = isPidRunning(pid);
+  if (hooks.enabled) {
+    await hooks.emit({
+      name: running ? "service.lifecycle.error" : "service.lifecycle.stop",
+      timestampMs: Date.now(),
+      workspaceRoot: ctx.workspaceRoot,
+      scope: "system",
+      data: { name, pid, running, timeoutMs },
+    });
+  }
+  return { name, pid, running };
 }
 
 export async function tailServiceLogs(ctx: Pick<ServiceRuntimeContext, "workspaceRoot">, nameInput: string, opts?: { lines?: number; maxBytes?: number }): Promise<string> {

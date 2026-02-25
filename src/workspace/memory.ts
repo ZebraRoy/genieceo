@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { getLongTermMemoryPath, getMemoryDir } from "./paths.js";
+import { getToolTurnContext } from "../tools/turn-context.js";
 
 type TruncationResult = { text: string; truncated: boolean };
 
@@ -35,12 +36,40 @@ function truncateTail(text: string, maxChars: number): TruncationResult {
 
 export async function readLongTermMemory(workspaceRoot: string): Promise<string> {
   const p = getLongTermMemoryPath(workspaceRoot);
-  return await readFile(p, "utf8").catch(() => "");
+  const out = await readFile(p, "utf8").catch(() => "");
+  const turn = getToolTurnContext();
+  if (turn?.hooks?.enabled) {
+    await turn.hooks.emit({
+      name: "memory.store.read",
+      timestampMs: Date.now(),
+      workspaceRoot,
+      scope: "system",
+      runId: turn.runId,
+      channel: turn.channel,
+      conversationKey: turn.conversationKey,
+      data: { layer: "long_term", path: p, chars: out.length },
+    });
+  }
+  return out;
 }
 
 export async function readDailyMemory(workspaceRoot: string, dateUtc: string): Promise<string> {
   const p = getDailyMemoryPath(workspaceRoot, dateUtc);
-  return await readFile(p, "utf8").catch(() => "");
+  const out = await readFile(p, "utf8").catch(() => "");
+  const turn = getToolTurnContext();
+  if (turn?.hooks?.enabled) {
+    await turn.hooks.emit({
+      name: "memory.store.read",
+      timestampMs: Date.now(),
+      workspaceRoot,
+      scope: "system",
+      runId: turn.runId,
+      channel: turn.channel,
+      conversationKey: turn.conversationKey,
+      data: { layer: "daily", dateUtc, path: p, chars: out.length },
+    });
+  }
+  return out;
 }
 
 export async function appendDailyMemory(opts: { workspaceRoot: string; dateUtc?: string; content: string; nowMs?: number }): Promise<string> {
@@ -57,6 +86,19 @@ export async function appendDailyMemory(opts: { workspaceRoot: string; dateUtc?:
   const header = before.trim() ? "" : `# ${dateUtc}\n\n`;
   const next = `${before}${before && !before.endsWith("\n") ? "\n" : ""}${header}${content}\n`;
   await writeFile(p, next, "utf8");
+  const turn = getToolTurnContext();
+  if (turn?.hooks?.enabled) {
+    await turn.hooks.emit({
+      name: "memory.store.write",
+      timestampMs: Date.now(),
+      workspaceRoot: opts.workspaceRoot,
+      scope: "system",
+      runId: turn.runId,
+      channel: turn.channel,
+      conversationKey: turn.conversationKey,
+      data: { layer: "daily", dateUtc, path: p, appendedChars: content.length },
+    });
+  }
   return `Appended daily memory: memory/${dateUtc}.md`;
 }
 
@@ -71,6 +113,19 @@ export async function appendLongTermMemory(opts: { workspaceRoot: string; conten
   const sep = before.trim() ? "\n\n" : "";
   const stamped = `## ${dateUtc}\n\n${content}\n`;
   await writeFile(p, `${before}${sep}${stamped}`, "utf8");
+  const turn = getToolTurnContext();
+  if (turn?.hooks?.enabled) {
+    await turn.hooks.emit({
+      name: "memory.store.write",
+      timestampMs: Date.now(),
+      workspaceRoot: opts.workspaceRoot,
+      scope: "system",
+      runId: turn.runId,
+      channel: turn.channel,
+      conversationKey: turn.conversationKey,
+      data: { layer: "long_term", path: p, appendedChars: content.length },
+    });
+  }
   return "Appended long-term memory: MEMORY.md";
 }
 

@@ -1,4 +1,5 @@
 import type { AssistantMessage, Context, Message, Model, Tool } from "@mariozechner/pi-ai";
+import { randomUUID } from "node:crypto";
 
 import type { GenieCeoConfig } from "../config/schema.js";
 import { loadConfig } from "../config/store.js";
@@ -18,6 +19,8 @@ import type { InboundAttachment, OutboundMessage } from "../plugins/types.js";
 import { runWithToolTurnContext } from "../tools/turn-context.js";
 import { buildUserContent } from "./user-content.js";
 import { renderAssistantText } from "./render.js";
+import { createHookRuntime, type HookRuntime } from "../hooks/runtime.js";
+import type { GenieHookEvent, ToolExecutionMetadata } from "../hooks/types.js";
 
 type MemoryFlushState = {
   lastFlushedAtMs: number;
@@ -38,6 +41,7 @@ export type AgentRuntime = {
   model: Model<any>;
   tools: Tool[];
   toolRegistry: ToolRegistry;
+  hooks: HookRuntime;
 };
 
 export type ConversationContext = {
@@ -60,6 +64,8 @@ export async function createAgentRuntime(opts?: {
 
   const toolRegistry = createToolRegistry({ workspaceRoot, invocationCwd, config });
   const tools = toolRegistry.list() as Tool[];
+  const hooks = await createHookRuntime({ workspaceRoot, config });
+  toolRegistry.setHooks(hooks);
 
   return {
     workspaceRoot,
@@ -72,7 +78,12 @@ export async function createAgentRuntime(opts?: {
     model,
     tools,
     toolRegistry,
+    hooks,
   };
+}
+
+function emitHook(runtime: HookRuntime, event: GenieHookEvent): void {
+  void runtime.emit(event).catch(() => {});
 }
 
 function estimateMessagesSize(messages: Message[]): { chars: number; messages: number } {
@@ -94,6 +105,7 @@ async function maybeRunMemoryFlush(opts: {
   conversationKey?: string;
   conversation?: ConversationContext;
 }): Promise<void> {
+  const runId = randomUUID();
   const cfg: any = (opts.runtime.config as any)?.memory?.flush ?? {};
   const enabled = cfg.enabled !== false;
   if (!enabled) return;
@@ -126,6 +138,22 @@ async function maybeRunMemoryFlush(opts: {
   const memoryTools = opts.runtime.tools.filter((t) => t.name.startsWith("memory_"));
   if (memoryTools.length === 0) return;
 
+  emitHook(opts.runtime.hooks, {
+    name: "memory.flush.start",
+    timestampMs: opts.nowMs,
+    workspaceRoot: opts.runtime.workspaceRoot,
+    scope: "memory_flush",
+    runId,
+    channel: opts.conversation?.channel,
+    conversationKey: opts.conversationKey,
+    data: {
+      chars: stats.chars,
+      messages: stats.messages,
+      softThresholdChars,
+      softThresholdMessages,
+    },
+  });
+
   const baseSystemPrompt = await loadSystemPrompt(opts.runtime.workspaceRoot);
   const convo = renderConversationContext(opts.conversation);
   const systemPrompt = `${baseSystemPrompt}\n\n---\n\n${renderRuntimeContext(opts.runtime, opts.nowMs)}${
@@ -146,7 +174,18 @@ async function maybeRunMemoryFlush(opts: {
 
   try {
     await runWithToolTurnContext(
-      { channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined, conversationKey: opts.conversationKey ? String(opts.conversationKey) : undefined },
+      {
+        channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined,
+        conversationKey: opts.conversationKey ? String(opts.conversationKey) : undefined,
+        hooks: opts.runtime.hooks,
+        runId,
+        toolExecMeta: {
+          scope: "memory_flush",
+          runId,
+          channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined,
+          conversationKey: opts.conversationKey ? String(opts.conversationKey) : undefined,
+        },
+      },
       async () => {
         await completeWithToolLoop({
           apiKey: opts.runtime.apiKey,
@@ -156,10 +195,42 @@ async function maybeRunMemoryFlush(opts: {
           registry: opts.runtime.toolRegistry,
           stream: false,
           maxIterations: maxToolIterations,
+          onEvent: (event) => {
+            emitHook(opts.runtime.hooks, {
+              name: "memory.flush.loop",
+              timestampMs: Date.now(),
+              workspaceRoot: opts.runtime.workspaceRoot,
+              scope: "memory_flush",
+              runId,
+              channel: opts.conversation?.channel,
+              conversationKey: opts.conversationKey,
+              data: { event },
+            });
+          },
         });
       },
     );
+    emitHook(opts.runtime.hooks, {
+      name: "memory.flush.end",
+      timestampMs: Date.now(),
+      workspaceRoot: opts.runtime.workspaceRoot,
+      scope: "memory_flush",
+      runId,
+      channel: opts.conversation?.channel,
+      conversationKey: opts.conversationKey,
+      data: { status: "ok" },
+    });
   } catch {
+    emitHook(opts.runtime.hooks, {
+      name: "memory.flush.error",
+      timestampMs: Date.now(),
+      workspaceRoot: opts.runtime.workspaceRoot,
+      scope: "memory_flush",
+      runId,
+      channel: opts.conversation?.channel,
+      conversationKey: opts.conversationKey,
+      data: { status: "error" },
+    });
     // Best-effort only; never fail the user turn due to flush.
   } finally {
     memoryFlushState.set(key, {
@@ -243,6 +314,7 @@ export async function runAgentTurn(opts: {
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<{ assistant: AssistantMessage; assistantText: string; appendedMessages: Message[]; outboundMessages: OutboundMessage[] }> {
   const nowMs = typeof opts.nowMs === "number" ? opts.nowMs : Date.now();
+  const runId = randomUUID();
 
   // OpenClaw-style pre-compaction memory flush: silent internal turn.
   await maybeRunMemoryFlush({
@@ -286,6 +358,14 @@ export async function runAgentTurn(opts: {
   const outboundMessages: OutboundMessage[] = [];
   const turnCtx: Parameters<typeof runWithToolTurnContext>[0] = {
     channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined,
+    hooks: opts.runtime.hooks,
+    runId,
+    toolExecMeta: {
+      scope: "agent",
+      runId,
+      channel: opts.conversation?.channel ? String(opts.conversation.channel) : undefined,
+      conversationKey: opts.conversationKey ? String(opts.conversationKey) : undefined,
+    } as ToolExecutionMetadata,
   };
   if (opts.conversationKey) {
     turnCtx.conversationKey = String(opts.conversationKey);
@@ -293,6 +373,20 @@ export async function runAgentTurn(opts: {
   }
 
   const assistant = await runWithToolTurnContext(turnCtx, async () => {
+    const onEvent = (event: AgentLoopEvent) => {
+      opts.onEvent?.(event);
+      emitHook(opts.runtime.hooks, {
+        name: `agent.loop.${event.type}`,
+        timestampMs: Date.now(),
+        workspaceRoot: opts.runtime.workspaceRoot,
+        scope: "agent",
+        runId,
+        channel: opts.conversation?.channel,
+        conversationKey: opts.conversationKey,
+        data: { event },
+      });
+    };
+
     return await completeWithToolLoop({
       apiKey: opts.runtime.apiKey,
       model: opts.runtime.model,
@@ -300,7 +394,7 @@ export async function runAgentTurn(opts: {
       tools: opts.runtime.tools,
       registry: opts.runtime.toolRegistry,
       stream: Boolean(opts.stream),
-      onEvent: opts.onEvent,
+      onEvent,
     });
   });
 

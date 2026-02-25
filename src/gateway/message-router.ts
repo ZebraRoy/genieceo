@@ -1,4 +1,5 @@
 import type { Message } from "@mariozechner/pi-ai";
+import { randomUUID } from "node:crypto";
 
 import { createAgentRuntime, runAgentTurn } from "../agent/runner.js";
 import type { AgentRuntime } from "../agent/runner.js";
@@ -17,7 +18,7 @@ export class GatewayMessageRouter {
   private sessionStore: JsonlSessionStore;
 
   constructor(private runtime: AgentRuntime, private send: SendFn, private logger?: Logger) {
-    this.sessionStore = new JsonlSessionStore(runtime.workspaceRoot);
+    this.sessionStore = new JsonlSessionStore(runtime.workspaceRoot, runtime.hooks);
   }
 
   static async create(opts: {
@@ -61,7 +62,23 @@ export class GatewayMessageRouter {
   }
 
   private async processInbound(msg: InboundMessage): Promise<void> {
+    const runId = randomUUID();
     const t0 = Date.now();
+    if (this.runtime.hooks.enabled) {
+      await this.runtime.hooks.emit({
+        name: "gateway.inbound.received",
+        timestampMs: t0,
+        workspaceRoot: this.runtime.workspaceRoot,
+        scope: "gateway",
+        runId,
+        channel: msg.channel,
+        conversationKey: msg.conversationKey,
+        data: {
+          textLen: msg.text?.length ?? 0,
+          attachments: Array.isArray(msg.attachments) ? msg.attachments.length : 0,
+        },
+      });
+    }
     this.logger?.info("inbound message", {
       channel: msg.channel,
       conversationKey: msg.conversationKey,
@@ -70,16 +87,49 @@ export class GatewayMessageRouter {
     });
     const control = this.parseControlCommand(msg.text);
     if (control === "reset") {
-      await this.sessionStore.clear(msg.conversationPathParts);
+      await this.sessionStore.clear(msg.conversationPathParts, {
+        runId,
+        channel: msg.channel,
+        conversationKey: msg.conversationKey,
+      });
+      if (this.runtime.hooks.enabled) {
+        await this.runtime.hooks.emit({
+          name: "gateway.outbound.send",
+          timestampMs: Date.now(),
+          workspaceRoot: this.runtime.workspaceRoot,
+          scope: "gateway",
+          runId,
+          channel: msg.channel,
+          conversationKey: msg.conversationKey,
+          data: { textLen: 46, attachments: 0 },
+        });
+      }
       await this.send({
         conversationKey: msg.conversationKey,
         text: "Conversation cleared. Start a new topic anytime.",
       });
+      if (this.runtime.hooks.enabled) {
+        await this.runtime.hooks.emit({
+          name: "gateway.outbound.sent",
+          timestampMs: Date.now(),
+          workspaceRoot: this.runtime.workspaceRoot,
+          scope: "gateway",
+          runId,
+          channel: msg.channel,
+          conversationKey: msg.conversationKey,
+          data: { textLen: 46, attachments: 0 },
+        });
+      }
       return;
     }
 
     try {
-      const messages: Message[] = await this.sessionStore.load(msg.conversationPathParts, { maxLines: 2000 });
+      const messages: Message[] = await this.sessionStore.load(msg.conversationPathParts, {
+        maxLines: 2000,
+        runId,
+        channel: msg.channel,
+        conversationKey: msg.conversationKey,
+      });
 
       const { assistantText, appendedMessages, outboundMessages } = await runAgentTurn({
         runtime: this.runtime,
@@ -134,10 +184,38 @@ export class GatewayMessageRouter {
         },
       });
 
-      await this.sessionStore.appendMany(msg.conversationPathParts, appendedMessages as any);
+      await this.sessionStore.appendMany(msg.conversationPathParts, appendedMessages as any, {
+        runId,
+        channel: msg.channel,
+        conversationKey: msg.conversationKey,
+      });
 
       if (assistantText) {
+        if (this.runtime.hooks.enabled) {
+          await this.runtime.hooks.emit({
+            name: "gateway.outbound.send",
+            timestampMs: Date.now(),
+            workspaceRoot: this.runtime.workspaceRoot,
+            scope: "gateway",
+            runId,
+            channel: msg.channel,
+            conversationKey: msg.conversationKey,
+            data: { textLen: assistantText.length, attachments: 0 },
+          });
+        }
         await this.send({ conversationKey: msg.conversationKey, text: assistantText });
+        if (this.runtime.hooks.enabled) {
+          await this.runtime.hooks.emit({
+            name: "gateway.outbound.sent",
+            timestampMs: Date.now(),
+            workspaceRoot: this.runtime.workspaceRoot,
+            scope: "gateway",
+            runId,
+            channel: msg.channel,
+            conversationKey: msg.conversationKey,
+            data: { textLen: assistantText.length, attachments: 0 },
+          });
+        }
       } else {
         this.logger?.warn("assistant produced no text", {
           channel: msg.channel,
@@ -149,20 +227,82 @@ export class GatewayMessageRouter {
         for (const out of outboundMessages) {
           if (!out) continue;
           // Enforce conversation key to avoid cross-chat sends.
+          const text = String((out as any)?.text ?? "");
+          const attachments = Array.isArray((out as any)?.attachments) ? (out as any).attachments : undefined;
+          if (this.runtime.hooks.enabled) {
+            await this.runtime.hooks.emit({
+              name: "gateway.outbound.send",
+              timestampMs: Date.now(),
+              workspaceRoot: this.runtime.workspaceRoot,
+              scope: "gateway",
+              runId,
+              channel: msg.channel,
+              conversationKey: msg.conversationKey,
+              data: { textLen: text.length, attachments: Array.isArray(attachments) ? attachments.length : 0 },
+            });
+          }
           await this.send({
             conversationKey: msg.conversationKey,
-            text: String((out as any)?.text ?? ""),
-            attachments: Array.isArray((out as any)?.attachments) ? (out as any).attachments : undefined,
+            text,
+            attachments,
           });
+          if (this.runtime.hooks.enabled) {
+            await this.runtime.hooks.emit({
+              name: "gateway.outbound.sent",
+              timestampMs: Date.now(),
+              workspaceRoot: this.runtime.workspaceRoot,
+              scope: "gateway",
+              runId,
+              channel: msg.channel,
+              conversationKey: msg.conversationKey,
+              data: { textLen: text.length, attachments: Array.isArray(attachments) ? attachments.length : 0 },
+            });
+          }
         }
       }
+      if (this.runtime.hooks.enabled) {
+        await this.runtime.hooks.emit({
+          name: "gateway.inbound.processed",
+          timestampMs: Date.now(),
+          workspaceRoot: this.runtime.workspaceRoot,
+          scope: "gateway",
+          runId,
+          channel: msg.channel,
+          conversationKey: msg.conversationKey,
+          data: { durationMs: Math.max(0, Date.now() - t0) },
+        });
+      }
     } catch (e) {
+      if (this.runtime.hooks.enabled) {
+        await this.runtime.hooks.emit({
+          name: "gateway.inbound.error",
+          timestampMs: Date.now(),
+          workspaceRoot: this.runtime.workspaceRoot,
+          scope: "gateway",
+          runId,
+          channel: msg.channel,
+          conversationKey: msg.conversationKey,
+          data: { error: e instanceof Error ? e.message : String(e) },
+        });
+      }
       this.logger?.errorWith("failed to process inbound", e, {
         channel: msg.channel,
         conversationKey: msg.conversationKey,
       });
       // Best-effort user-facing signal.
       try {
+        if (this.runtime.hooks.enabled) {
+          await this.runtime.hooks.emit({
+            name: "gateway.outbound.error",
+            timestampMs: Date.now(),
+            workspaceRoot: this.runtime.workspaceRoot,
+            scope: "gateway",
+            runId,
+            channel: msg.channel,
+            conversationKey: msg.conversationKey,
+            data: { reason: "processing_failed" },
+          });
+        }
         await this.send({
           conversationKey: msg.conversationKey,
           text: "Internal error while processing your message. Please check gateway logs.",

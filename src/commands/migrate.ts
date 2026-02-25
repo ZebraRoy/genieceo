@@ -76,6 +76,7 @@ export async function runMigrate(opts: {
     ? async (conflict: PromptTemplateConflict): Promise<"keep" | "template"> => {
         const allowedToolNames = new Set(["read_file", "write_file", "edit_file", "list_dir", "run_command"]);
         const allowedTools = runtime.tools.filter((t) => allowedToolNames.has(t.name));
+        runtime.toolRegistry.setHooks(runtime.hooks);
 
         const basePrompt = await loadSystemPrompt(workspaceRoot);
         const systemPrompt = `${basePrompt}\n\n---\n\n## MIGRATE_ASSISTANT\n\nYou are GenieCEO, helping the user migrate prompt templates.\n\nYou are resolving a single markdown file conflict.\n\n- File: ${conflict.filename}\n\nYou have:\n- EXISTING (what the user currently has)\n- TEMPLATE (what this GenieCEO version ships)\n- DIFF (a compact line diff; may be truncated)\n\nTools you MAY use:\n- read_file, write_file, edit_file, list_dir (prefer scope='workspace' and paths like prompts/${conflict.filename})\n- run_command (only if necessary; keep it safe and non-destructive)\n\nMigration guidance:\n- Prefer preserving the user's edits.\n- If you make edits to the existing file, instruct the user to type 'keep' to proceed (so we don't overwrite afterward).\n\nHard rules:\n- Do not delete files.\n- Do not modify anything outside ~/.genieceo/prompts unless the user explicitly asks.\n\nIf asked to recommend, explain briefly and end with: RECOMMENDATION: keep|template.\n\n### EXISTING\n${conflict.existingContent}\n\n### TEMPLATE\n${conflict.templateContent}\n\n### DIFF\n${conflict.diffText}\n`;

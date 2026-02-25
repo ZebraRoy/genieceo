@@ -32,6 +32,10 @@ Rules:
 - Select a skill based on the user’s needs.
 - Read the full skill file with `read_file` to load its instructions before acting.
 
+Built-in guidance:
+- GenieCEO includes a `runtime-hooks` skill for hook/callback scenarios.
+- When users ask about progress hooks, callbacks, lifecycle events, or writing subagent progress to files, load `skills/runtime-hooks/SKILL.md`.
+
 ## How to manage skills (no extra tools)
 
 Use the existing file tools to manage skills:

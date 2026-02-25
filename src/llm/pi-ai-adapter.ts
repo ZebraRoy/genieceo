@@ -13,6 +13,7 @@ import {
 
 import type { GenieCeoConfig, LlmProfile } from "../config/schema.js";
 import type { ToolRegistry } from "../tools/registry.js";
+import { getToolTurnContext } from "../tools/turn-context.js";
 
 export class LlmConfigError extends Error {
   name = "LlmConfigError";
@@ -162,7 +163,35 @@ export async function completeWithToolLoop(opts: {
         arguments: validatedArgs ?? {},
       });
       const t0 = Date.now();
-      const resultText = await opts.registry.execute(call.name, validatedArgs);
+      const turn = getToolTurnContext();
+      const prevMeta = turn?.toolExecMeta;
+      if (turn) {
+        turn.toolExecMeta = {
+          ...(prevMeta ?? {}),
+          runId: turn.runId,
+          scope: prevMeta?.scope ?? (turn ? "agent" : "system"),
+          channel: turn.channel,
+          conversationKey: turn.conversationKey,
+          iteration: i,
+          toolCallId: call.id,
+          subagent: prevMeta?.subagent,
+        };
+      }
+      const resultText = await (async () => {
+        try {
+          return await opts.registry.execute(call.name, validatedArgs, {
+            runId: turn?.runId,
+            scope: turn?.toolExecMeta?.scope ?? (turn ? "agent" : "system"),
+            channel: turn?.channel,
+            conversationKey: turn?.conversationKey,
+            iteration: i,
+            toolCallId: call.id,
+            subagent: turn?.toolExecMeta?.subagent,
+          });
+        } finally {
+          if (turn) turn.toolExecMeta = prevMeta;
+        }
+      })();
       const isError = resultText.startsWith("Error:");
       opts.onEvent?.({
         type: "tool_execute_end",

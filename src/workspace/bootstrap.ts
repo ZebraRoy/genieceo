@@ -214,11 +214,13 @@ export async function ensureBaselineSkills(workspaceRoot: string, opts: { overwr
   const installed = getInstalledBuiltinSkillsDir();
   const skillsDir = getSkillsDir(workspaceRoot);
 
-  // Minimal baseline: manage-skills.
-  const src = path.join(installed, "manage-skills");
-  const dst = path.join(skillsDir, "manage-skills");
-  if (!(await exists(src))) return;
-  await copyDirRecursive(src, dst, opts);
+  // Minimal baseline: skills required for self-management and runtime extensibility.
+  for (const name of ["manage-skills", "runtime-hooks"]) {
+    const src = path.join(installed, name);
+    const dst = path.join(skillsDir, name);
+    if (!(await exists(src))) continue;
+    await copyDirRecursive(src, dst, opts);
+  }
 }
 
 /**
